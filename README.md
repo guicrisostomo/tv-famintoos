@@ -1,75 +1,30 @@
-# React + TypeScript + Vite
+# Famintoos TV
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Painel e player para um canal interno formado exclusivamente por conteúdos cadastrados ou licenciados pela própria empresa.
 
-Currently, two official plugins are available:
+## Desenvolvimento
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
-
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-
+```bash
+npm install
+copy .env.example .env.local
+npm run dev
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+- Painel: `/`
+- Tela pública: `/tv/<company_id>/<display_id>`
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+A tela pública começa com o botão neutro **Iniciar exibição**, necessário para liberar áudio/fullscreen. Depois da ativação, sem uma programação válida, ela permanece totalmente preta.
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+## Supabase
 
-```
+A migration em `supabase/migrations` cria o núcleo do Canal de TV, índices, RLS multiempresa e publicação Realtime. Ela exige as funções preexistentes `get_current_user_cnpj()` e `get_current_user_type()` e falha explicitamente se o projeto alvo não as tiver. A migration não remove objetos nem dados.
+
+O frontend aceita somente URL e chave publicável. A consulta do player está centralizada na RPC `get_tv_player_payload`, que deve ser implementada no backend do projeto alvo depois de confirmar o schema real de TVs/autenticação. O payload deve retornar `companyId`, `displayId`, `items`, `interruptions` e `syncedAt`; a resposta é novamente validada pelo escopo da rota.
+
+## Mídia e Cloudflare R2
+
+`resolveMediaUrl(media)` preserva `media_url` e suporta `cloudflare_r2`, `supabase_storage` e `external_url`. Novos uploads R2 devem passar pelo backend autenticado e usar chaves no formato `tv/<company_id>/<media_type>/<uuid>/<filename>`. Nunca configure credenciais R2 em variáveis `VITE_*`.
+
+## Vercel e Fire TV
+
+Na Vercel, configure `VITE_SUPABASE_URL` e `VITE_SUPABASE_PUBLISHABLE_KEY`; configure os segredos R2 apenas no backend de upload. Para Fire TV, abra a URL pública da TV, clique em **Iniciar exibição** e valide vídeo, áudio, chamada durante vídeo e retomada. O player mantém apenas um vídeo ativo, carrega o conteúdo corrente e isola o cache por empresa e TV.

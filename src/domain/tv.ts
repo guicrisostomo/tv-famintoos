@@ -1,0 +1,62 @@
+export type MediaType = 'image' | 'video' | 'message' | 'qr_code' | 'audio'
+export type StorageProvider = 'cloudflare_r2' | 'supabase_storage' | 'external_url'
+export type InterruptionKind = 'call' | 'urgent_notice' | 'campaign'
+
+export interface TvMedia {
+  id: string
+  companyId: string
+  type: MediaType
+  mediaUrl?: string | null
+  publicUrl?: string | null
+  storageProvider?: StorageProvider | null
+  storageKey?: string | null
+  storageBucket?: string | null
+  mimeType?: string | null
+  title?: string | null
+}
+
+export interface ProgramItem {
+  id: string
+  companyId: string
+  displayIds: string[]
+  media: TvMedia
+  durationSeconds: number
+  volume: number
+  muted: boolean
+  fit: 'contain' | 'cover' | 'fill'
+  resumeBehavior: 'resume' | 'restart'
+  active: boolean
+  overlayText?: string | null
+  qrCodeUrl?: string | null
+}
+
+export interface Interruption {
+  id: string
+  companyId: string
+  displayId: string
+  kind: InterruptionKind
+  priority: number
+  requestedAt: string
+  expiresAt?: string | null
+  cancelledAt?: string | null
+  durationSeconds: number
+  title: string
+  subtitle?: string | null
+  media?: TvMedia | null
+}
+
+export interface PlaybackSnapshot {
+  itemId: string
+  itemIndex: number
+  elapsedSeconds: number
+  remainingSeconds?: number
+  savedAt: string
+}
+
+export interface PlayerPayload {
+  companyId: string
+  displayId: string
+  items: ProgramItem[]
+  interruptions: Interruption[]
+  syncedAt: string
+}
