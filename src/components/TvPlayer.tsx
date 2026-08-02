@@ -37,7 +37,7 @@ export function TvPlayer({ companyId, displayId }: { companyId: string, displayI
   useEffect(() => {
     if (!supabase || !companyId || !displayId) return
     const client = supabase
-    const channel = client.channel(`tv:${companyId}:${displayId}`).on('postgres_changes', { event: '*', schema: 'public', table: 'tv_programs', filter: `company_id=eq.${companyId}` }, () => void load()).on('postgres_changes', { event: '*', schema: 'public', table: 'tv_playlist_items', filter: `display_id=eq.${displayId}` }, () => void load()).on('postgres_changes', { event: '*', schema: 'public', table: 'tv_media', filter: `company_id=eq.${companyId}` }, () => void load()).on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'tv_interruptions', filter: `display_id=eq.${displayId}` }, () => void load()).subscribe()
+    const channel = client.channel(`tv:${companyId}:${displayId}`).on('postgres_changes', { event: '*', schema: 'public', table: 'tv_programs', filter: `company_id=eq.${companyId}` }, () => void load()).on('postgres_changes', { event: '*', schema: 'public', table: 'tv_playlist_items', filter: `display_id=eq.${displayId}` }, () => void load()).on('postgres_changes', { event: '*', schema: 'public', table: 'tv_media', filter: `company_id=eq.${companyId}` }, () => void load()).on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'tv_interruptions', filter: `display_id=eq.${displayId}` }, () => void load()).on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'tv_calls', filter: `display_id=eq.${displayId}` }, () => void load()).subscribe()
     return () => { void client.removeChannel(channel) }
   }, [companyId, displayId, load])
 
@@ -52,6 +52,7 @@ export function TvPlayer({ companyId, displayId }: { companyId: string, displayI
       savePlayback(companyId, displayId, { itemId: current?.id ?? '', itemIndex: index, elapsedSeconds: videoRef.current?.currentTime ?? 0, savedAt: new Date().toISOString() })
       videoRef.current?.pause()
       setActiveInterruption(next)
+      if (next.kind === 'call' && supabase) void supabase.from('tv_calls').update({ status: 'showing', displayed_at: new Date().toISOString() }).eq('id', next.id).eq('company_id', companyId)
     }, 0)
     return () => window.clearTimeout(startTimer)
   }, [activated, activeInterruption, companyId, current?.id, displayId, index, interruptions])
@@ -59,13 +60,24 @@ export function TvPlayer({ companyId, displayId }: { companyId: string, displayI
   useEffect(() => {
     if (!activeInterruption) return
     const interruptionId = activeInterruption.id
+    const isCall = activeInterruption.kind === 'call'
     const timer = window.setTimeout(() => {
       setInterruptions(queue => queue.filter(i => i.id !== interruptionId))
       setActiveInterruption(null)
+      if (isCall && supabase) void supabase.from('tv_calls').update({ status: 'completed', completed_at: new Date().toISOString() }).eq('id', interruptionId).eq('company_id', companyId)
       void videoRef.current?.play()
     }, activeInterruption.durationSeconds * 1000)
     return () => window.clearTimeout(timer)
-  }, [activeInterruption])
+  }, [activeInterruption, companyId])
+
+  useEffect(() => {
+    if (!activeInterruption || activeInterruption.kind !== 'call' || !activated || !('speechSynthesis' in window)) return
+    const personName = activeInterruption.subtitle?.trim() || activeInterruption.title.replace(/^Chamando\s+/i, '')
+    const utterance = new SpeechSynthesisUtterance(`Chamando ${personName}. Por favor, compareça ao atendimento.`)
+    utterance.lang = 'pt-BR'; utterance.rate = 0.9; utterance.volume = 1
+    window.speechSynthesis.cancel(); window.speechSynthesis.speak(utterance)
+    return () => window.speechSynthesis.cancel()
+  }, [activated, activeInterruption])
 
   useEffect(() => {
     if (!activated || !current || current.media.type === 'video' || activeInterruption) return
@@ -75,9 +87,14 @@ export function TvPlayer({ companyId, displayId }: { companyId: string, displayI
 
   const activate = async () => { setActivated(true); try { await document.documentElement.requestFullscreen?.() } catch { /* fullscreen is optional */ } }
   if (!activated) return <main className="tv-screen"><button className="activation" onClick={activate}>Iniciar exibição</button></main>
-  if (!current) return <main className="tv-screen" aria-label="TV sem programação" />
+  if (!current) return <main className="tv-screen" aria-label="TV sem programação">{activeInterruption ? <CallOverlay interruption={activeInterruption}/> : null}</main>
 
-  return <main className="tv-screen"><Media item={current} displayId={displayId} videoRef={videoRef} onEnded={() => setIndex(i => (i + 1) % items.length)} />{activeInterruption ? <div className="call-overlay"><div><strong>{activeInterruption.title}</strong>{activeInterruption.subtitle ? <p>{activeInterruption.subtitle}</p> : null}</div></div> : null}</main>
+  return <main className="tv-screen"><Media item={current} displayId={displayId} videoRef={videoRef} onEnded={() => setIndex(i => (i + 1) % items.length)} />{activeInterruption ? <CallOverlay interruption={activeInterruption}/> : null}</main>
+}
+
+function CallOverlay({ interruption }: { interruption: Interruption }) {
+  const isCall = interruption.kind === 'call'
+  return <div className="call-overlay" role="status" aria-live="assertive"><div>{isCall ? <span className="call-kicker">Chamando</span> : null}<strong>{isCall ? interruption.subtitle ?? interruption.title.replace(/^Chamando\s+/i, '') : interruption.title}</strong><p>{isCall ? 'Por favor, compareça ao atendimento.' : interruption.subtitle}</p></div></div>
 }
 
 function Media({ item, displayId, videoRef, onEnded }: { item: ProgramItem, displayId: string, videoRef: React.RefObject<HTMLVideoElement | null>, onEnded: () => void }) {

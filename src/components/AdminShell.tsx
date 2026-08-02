@@ -6,6 +6,8 @@ import { ConnectionBanner } from './ConnectionBanner'
 import { useTvData } from '../hooks/useTvData'
 import { ContentComposer } from './ContentComposer'
 import { TvSetupPage } from './TvSetupPage'
+import { CallsPage } from './CallsPage'
+import { useTvCalls } from '../hooks/useTvCalls'
 
 const navigation = [
   ['Visão geral', LayoutDashboard], ['Canal', Radio], ['Programação', Clapperboard],
@@ -20,6 +22,7 @@ export function AdminShell({ profile, authError }: { profile: CompanyProfile, au
   const [composerOpen, setComposerOpen] = useState(false)
   const { signOut } = useAuth()
   const tvData = useTvData(profile.companyId)
+  const callData = useTvCalls(profile.companyId)
 
   return (
     <div className="app-shell">
@@ -38,15 +41,17 @@ export function AdminShell({ profile, authError }: { profile: CompanyProfile, au
         <ConnectionBanner />
         {authError ? <div className="connection-banner error" role="alert">{authError}</div> : null}
         {tvData.error ? <div className="connection-banner error" role="alert">Supabase: {tvData.error}</div> : null}
+        {callData.error ? <div className="connection-banner error" role="alert">Chamadas: {callData.error}</div> : null}
         <header className="topbar">
           <div className="tv-switcher"><select className="channel-picker" aria-label="TV selecionada" value={selectedDisplay} onChange={e => setSelectedDisplay(e.target.value)}><option value="">Todas as TVs</option>{tvData.displays.map(display => <option key={display.id} value={display.id}>{display.name}</option>)}</select>{selectedDisplay ? <a className="button secondary" href={`/tv/${profile.companyId}/${selectedDisplay}`} target="_blank" rel="noreferrer">Exibir na TV</a> : null}</div>
           <div className="account-menu"><div><strong>{profile.name ?? profile.email ?? 'Usuário'}</strong><span>Empresa {profile.companyId}</span></div><div className="avatar" aria-label="Conta da empresa">{(profile.name ?? profile.email ?? 'U').slice(0, 2).toUpperCase()}</div><button className="button secondary" onClick={() => void signOut()}>Sair</button></div>
         </header>
         <div className="content">
-          {page === 'Visão geral' ? <Dashboard displayCount={tvData.displays.length} itemCount={tvData.items.length} onCreate={() => setComposerOpen(true)} /> : null}
+          {page === 'Visão geral' ? <Dashboard displays={tvData.displays} itemCount={tvData.items.length} onCreate={() => setComposerOpen(true)} /> : null}
           {page === 'Canal' ? <TvSetupPage companyId={profile.companyId} displays={tvData.displays} onSaved={tvData.reload}/> : null}
           {page === 'Programação' ? <ProgrammingPage companyId={profile.companyId} displays={tvData.displays} items={tvData.items} onReload={tvData.reload}/> : null}
-          {page === 'Personalização' || page === 'Chamadas' || page === 'Blocos' || page === 'Campanhas' || page === 'Intervalos' || page === 'Grade horária' ? <ConfigurationPage title={page} onAdd={() => setComposerOpen(true)} /> : null}
+          {page === 'Chamadas' ? <CallsPage companyId={profile.companyId} displays={tvData.displays} calls={callData.calls} loading={callData.loading} onReload={callData.reload}/> : null}
+          {page === 'Personalização' || page === 'Blocos' || page === 'Campanhas' || page === 'Intervalos' || page === 'Grade horária' ? <ConfigurationPage title={page} onAdd={() => setComposerOpen(true)} /> : null}
           {page === 'Relatórios' ? <EmptyPage title="Relatório de exibições" description="As impressões reais aparecerão aqui após a primeira reprodução concluída." /> : null}
           {page === 'Armazenamento' ? <StoragePage /> : null}
           {page === 'Configurações' ? <ConfigurationPage title="Configurações" /> : null}
@@ -57,7 +62,8 @@ export function AdminShell({ profile, authError }: { profile: CompanyProfile, au
   )
 }
 
-function Dashboard({ displayCount, itemCount, onCreate }: { displayCount: number; itemCount: number; onCreate: () => void }) {
+function Dashboard({ displays, itemCount, onCreate }: { displays: import('../hooks/useTvData').TvDisplayRecord[]; itemCount: number; onCreate: () => void }) {
+  const displayCount = displays.length
   return <>
     <div className="page-header"><div><h1>Canal de TV</h1><p>Organize a programação contínua das televisões da sua empresa.</p></div><button className="button primary" onClick={onCreate}><Plus size={17} /> Criar programação</button></div>
     <div className="cards">
@@ -67,8 +73,8 @@ function Dashboard({ displayCount, itemCount, onCreate }: { displayCount: number
       <Stat label="Exibições hoje" value="0" detail="Nenhuma impressão registrada" />
     </div>
     <div className="grid-2">
-      <section className="card"><div className="section-title"><h2>Programação atual</h2></div><EmptyState onCreate={onCreate} /></section>
-      <section className="card"><div className="section-title"><h2>Status das TVs</h2></div><div className="status-list"><div className="status-row"><span className="status-dot" /><div className="status-copy"><strong>Nenhuma TV configurada</strong><span>Cadastre uma TV para acompanhar o status.</span></div></div></div></section>
+      <section className="card"><div className="section-title"><h2>Programação atual</h2></div>{itemCount > 0 ? <div className="dashboard-summary"><MonitorPlay size={28}/><strong>{itemCount} {itemCount === 1 ? 'conteúdo configurado' : 'conteúdos configurados'}</strong><p>Use a seção Programação para visualizar, reordenar ou remover itens.</p></div> : <EmptyState onCreate={onCreate} />}</section>
+      <section className="card"><div className="section-title"><h2>Status das TVs</h2></div><div className="status-list">{displays.length > 0 ? displays.map(display => <div className="status-row" key={display.id}><span className={`status-dot ${display.is_active ? 'online' : ''}`} /><div className="status-copy"><strong>{display.name}</strong><span>{display.is_active ? 'TV ativa e disponível para exibição' : 'TV desativada'}</span></div></div>) : <div className="status-row"><span className="status-dot" /><div className="status-copy"><strong>Nenhuma TV configurada</strong><span>Cadastre uma TV para acompanhar o status.</span></div></div>}</div></section>
     </div>
   </>
 }
