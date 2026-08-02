@@ -118,7 +118,7 @@ export function TvPlayer({ companyId, displayId }: { companyId: string, displayI
       try { await tvAudioService.playCallSound(); await new Promise(resolve => window.setTimeout(resolve, 480)) } catch { /* diagnostics expose playback errors */ }
       if (!synthesis) return
       spoken = true
-      const utterance = new SpeechSynthesisUtterance(`Chamando ${personName}. Por favor, compareça ao atendimento.`)
+      const utterance = new SpeechSynthesisUtterance(`Chamando ${personName}. Por favor, compareça ao balcão.`)
       const voices = synthesis.getVoices()
       utterance.voice = voices.find(voice => voice.lang.toLowerCase() === 'pt-br') ?? voices.find(voice => voice.lang.toLowerCase().startsWith('pt')) ?? null
       utterance.lang = 'pt-BR'; utterance.rate = 0.85; utterance.pitch = 1; utterance.volume = 1
@@ -163,7 +163,7 @@ async function updateCall(id: string, companyId: string, values: { status: 'show
 
 function CallOverlay({ interruption }: { interruption: Interruption }) {
   const isCall = interruption.kind === 'call'
-  return <div className="call-overlay" role="status" aria-live="assertive"><div>{isCall ? <span className="call-kicker">Chamando</span> : null}<strong>{isCall ? interruption.subtitle ?? interruption.title.replace(/^Chamando\s+/i, '') : interruption.title}</strong><p>{isCall ? 'Por favor, compareça ao atendimento.' : interruption.subtitle}</p></div></div>
+  return <div className="call-overlay" role="status" aria-live="assertive"><div>{isCall ? <span className="call-kicker">Chamando</span> : null}<strong>{isCall ? interruption.subtitle ?? interruption.title.replace(/^Chamando\s+/i, '') : interruption.title}</strong><p>{isCall ? 'Por favor, compareça ao balcão.' : interruption.subtitle}</p></div></div>
 }
 
 function AudioDiagnostic({ diagnostics, soundEnabled }: { diagnostics: TvAudioDiagnostics; soundEnabled: boolean }) {
