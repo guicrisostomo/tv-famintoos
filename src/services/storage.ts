@@ -26,3 +26,9 @@ export async function uploadToR2(ticket: UploadTicket, file: File) {
   if (!response.ok) throw new Error(`Falha na conexão com o Cloudflare R2 (HTTP ${response.status}).`)
 }
 import { authenticatedFetch } from './authenticatedFetch'
+
+export async function deleteTvMedia(mediaId: string) {
+  const response = await authenticatedFetch('/api/tv/media/delete', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mediaId }) })
+  const result = await response.json().catch(() => ({})) as { error?: string }
+  if (!response.ok) throw new Error(result.error ?? `Falha ao excluir mídia (HTTP ${response.status}).`)
+}

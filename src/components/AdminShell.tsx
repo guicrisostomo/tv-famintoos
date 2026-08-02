@@ -8,6 +8,7 @@ import { ContentComposer } from './ContentComposer'
 import { TvSetupPage } from './TvSetupPage'
 import { CallsPage } from './CallsPage'
 import { useTvCalls } from '../hooks/useTvCalls'
+import { MediaLibraryPage } from './MediaLibraryPage'
 
 const navigation = [
   ['Visão geral', LayoutDashboard], ['Canal', Radio], ['Programação', Clapperboard],
@@ -53,7 +54,7 @@ export function AdminShell({ profile, authError }: { profile: CompanyProfile, au
           {page === 'Chamadas' ? <CallsPage companyId={profile.companyId} displays={tvData.displays} calls={callData.calls} loading={callData.loading} onReload={callData.reload}/> : null}
           {page === 'Personalização' || page === 'Blocos' || page === 'Campanhas' || page === 'Intervalos' || page === 'Grade horária' ? <ConfigurationPage title={page} onAdd={() => setComposerOpen(true)} /> : null}
           {page === 'Relatórios' ? <EmptyPage title="Relatório de exibições" description="As impressões reais aparecerão aqui após a primeira reprodução concluída." /> : null}
-          {page === 'Armazenamento' ? <StoragePage /> : null}
+          {page === 'Armazenamento' ? <MediaLibraryPage media={tvData.media} items={tvData.items} onReload={tvData.reload}/> : null}
           {page === 'Configurações' ? <ConfigurationPage title="Configurações" /> : null}
         </div>
       </main>
@@ -93,8 +94,4 @@ function EmptyPage({ title, description, onAdd }: { title: string; description: 
 
 function ConfigurationPage({ title, onAdd }: { title: string; onAdd?: () => void }) {
   return <EmptyPage title={title} description="Personalize este recurso para a empresa e para cada TV selecionada." onAdd={onAdd} />
-}
-
-function StoragePage() {
-  return <><div className="page-header"><div><h1>Armazenamento</h1><p>Provedores usados pelas mídias do canal.</p></div></div><section className="card"><div className="storage-note"><Cloud size={22} /><div><strong>Cloudflare R2 preferencial</strong><p>Uploads exigem um endpoint autenticado que forneça URL pré-assinada. Supabase Storage e URLs externas continuam compatíveis. Nenhuma credencial de escrita é aceita no navegador.</p></div></div></section></>
 }

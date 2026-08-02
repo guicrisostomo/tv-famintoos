@@ -1,7 +1,7 @@
-import { createClient } from '@supabase/supabase-js'
+import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import type { VercelRequest } from '@vercel/node'
 
-export interface AuthenticatedCompany { userId: string; companyId: string }
+export interface AuthenticatedCompany { userId: string; companyId: string; supabase: SupabaseClient }
 
 export async function requireAuthenticatedCompany(request: VercelRequest): Promise<AuthenticatedCompany> {
   const supabaseUrl = process.env.SUPABASE_URL ?? process.env.VITE_SUPABASE_URL
@@ -22,7 +22,7 @@ export async function requireAuthenticatedCompany(request: VercelRequest): Promi
   const { data: profile, error: profileError } = await supabase.from('tb_user')
     .select('cnpj,fg_ativo').eq('uid', userData.user.id).eq('fg_ativo', true).single()
   if (profileError || !profile?.cnpj) throw new HttpError(403, 'Usuário sem empresa ativa.')
-  return { userId: userData.user.id, companyId: profile.cnpj }
+  return { userId: userData.user.id, companyId: profile.cnpj, supabase }
 }
 
 export class HttpError extends Error {

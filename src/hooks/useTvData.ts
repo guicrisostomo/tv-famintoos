@@ -2,24 +2,26 @@ import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '../services/supabase'
 
 export interface TvDisplayRecord { id: string; company_id: string; name: string; description: string | null; is_active: boolean; sound_enabled: boolean }
-export interface TvMediaRecord { id: string; title: string; media_type: 'image' | 'video' | 'message'; media_url: string | null; message_text: string | null; duration_seconds: number | null; public_url: string | null; storage_provider: string | null }
+export interface TvMediaRecord { id: string; company_id?: string; title: string; media_type: 'image' | 'video' | 'message'; media_url: string | null; message_text: string | null; duration_seconds: number | null; public_url: string | null; storage_provider: string | null; storage_key?: string | null; file_size?: number | null; r2_asset_id?: number | null; created_at?: string }
 export interface TvPlaylistRecord { id: string; display_id: string; media_id: string; position: number; is_active: boolean; media: TvMediaRecord }
 
 export function useTvData(companyId: string) {
   const [displays, setDisplays] = useState<TvDisplayRecord[]>([])
   const [items, setItems] = useState<TvPlaylistRecord[]>([])
+  const [media, setMedia] = useState<TvMediaRecord[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   const reload = useCallback(async () => {
     if (!supabase) { setError('Supabase não configurado.'); setLoading(false); return }
     setLoading(true); setError(null)
-    const [displayResult, playlistResult] = await Promise.all([
+    const [displayResult, playlistResult, mediaResult] = await Promise.all([
       supabase.from('tv_displays').select('id,company_id,name,description,is_active,sound_enabled').eq('company_id', companyId).order('name'),
       supabase.from('tv_playlist_items').select('id,display_id,media_id,position,is_active,media:tv_media(id,title,media_type,media_url,message_text,duration_seconds,public_url,storage_provider)').eq('company_id', companyId).order('position'),
+      supabase.from('tv_media').select('id,company_id,title,media_type,media_url,message_text,duration_seconds,public_url,storage_provider,storage_key,file_size,r2_asset_id,created_at').eq('company_id', companyId).order('created_at', { ascending: false }),
     ])
-    if (displayResult.error || playlistResult.error) setError(displayResult.error?.message ?? playlistResult.error?.message ?? 'Falha ao carregar dados da TV.')
-    else { setDisplays(displayResult.data as TvDisplayRecord[]); setItems(playlistResult.data as unknown as TvPlaylistRecord[]) }
+    if (displayResult.error || playlistResult.error || mediaResult.error) setError(displayResult.error?.message ?? playlistResult.error?.message ?? mediaResult.error?.message ?? 'Falha ao carregar dados da TV.')
+    else { setDisplays(displayResult.data as TvDisplayRecord[]); setItems(playlistResult.data as unknown as TvPlaylistRecord[]); setMedia(mediaResult.data as TvMediaRecord[]) }
     setLoading(false)
   }, [companyId])
 
@@ -27,8 +29,8 @@ export function useTvData(companyId: string) {
   useEffect(() => {
     if (!supabase) return
     const client = supabase
-    const channel = client.channel(`admin-tv:${companyId}`).on('postgres_changes', { event: '*', schema: 'public', table: 'tv_displays', filter: `company_id=eq.${companyId}` }, () => void reload()).on('postgres_changes', { event: '*', schema: 'public', table: 'tv_playlist_items', filter: `company_id=eq.${companyId}` }, () => void reload()).subscribe()
+    const channel = client.channel(`admin-tv:${companyId}`).on('postgres_changes', { event: '*', schema: 'public', table: 'tv_displays', filter: `company_id=eq.${companyId}` }, () => void reload()).on('postgres_changes', { event: '*', schema: 'public', table: 'tv_playlist_items', filter: `company_id=eq.${companyId}` }, () => void reload()).on('postgres_changes', { event: '*', schema: 'public', table: 'tv_media', filter: `company_id=eq.${companyId}` }, () => void reload()).subscribe()
     return () => { void client.removeChannel(channel) }
   }, [companyId, reload])
-  return { displays, items, loading, error, reload }
+  return { displays, items, media, loading, error, reload }
 }

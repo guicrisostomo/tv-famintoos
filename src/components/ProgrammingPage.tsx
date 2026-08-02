@@ -30,5 +30,6 @@ export function ProgrammingPage({ companyId, displays, items, onReload }: { comp
 
 function SortableItem({ item, onRemove }: { item: TvPlaylistRecord; onRemove: (id: string) => Promise<void> }) {
   const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: item.id })
-  return <div ref={setNodeRef} className="timeline-item" style={{ transform: CSS.Transform.toString(transform), transition }}><button className="drag button" aria-label={`Reordenar ${item.media.title}`} {...attributes} {...listeners}><GripVertical size={18}/></button><div><strong>{item.media.title}</strong><span>{item.media.media_type === 'message' ? 'Texto' : 'Imagem'} · {item.media.duration_seconds ?? 10} s</span></div><button className="icon-button danger" onClick={() => void onRemove(item.id)} aria-label={`Remover ${item.media.title}`}><Trash2 size={16}/></button></div>
+  const typeLabel = item.media.media_type === 'message' ? 'Texto' : item.media.media_type === 'video' ? 'Vídeo' : 'Imagem'
+  return <div ref={setNodeRef} className="timeline-item" style={{ transform: CSS.Transform.toString(transform), transition }}><button className="drag button" aria-label={`Reordenar ${item.media.title}`} {...attributes} {...listeners}><GripVertical size={18}/></button><div><strong>{item.media.title}</strong><span>{typeLabel} · {item.media.duration_seconds ?? 10} s</span></div><button className="icon-button danger" onClick={() => void onRemove(item.id)} aria-label={`Remover ${item.media.title}`}><Trash2 size={16}/></button></div>
 }
