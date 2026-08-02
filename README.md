@@ -29,6 +29,8 @@ O frontend aceita somente URL e chave publicável. A consulta do player está ce
 
 O backend deve expor `GET /api/tv/media/health`, autenticado, retornando `2xx` quando a conexão R2 estiver operacional, e `POST /api/tv/media/upload-ticket` para URLs pré-assinadas. Falhas do Supabase ou desses endpoints são apresentadas no painel; o frontend nunca recebe as credenciais S3.
 
+Essas duas Vercel Functions estão em `api/tv/media`. O bucket R2 precisa de CORS permitindo `PUT` a partir dos domínios de produção/preview, com o header `Content-Type`. As URLs de upload expiram em cinco minutos e são sempre limitadas ao prefixo da empresa autenticada.
+
 ## Vercel e Fire TV
 
 Na Vercel, configure `VITE_SUPABASE_URL` e `VITE_SUPABASE_PUBLISHABLE_KEY`; configure os segredos R2 apenas no backend de upload. Para Fire TV, abra a URL pública da TV, clique em **Iniciar exibição** e valide vídeo, áudio, chamada durante vídeo e retomada. O player mantém apenas um vídeo ativo, carrega o conteúdo corrente e isola o cache por empresa e TV.

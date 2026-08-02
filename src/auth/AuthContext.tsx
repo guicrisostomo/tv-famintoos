@@ -20,6 +20,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!supabase) { setError('Supabase não configurado. Informe as variáveis VITE_SUPABASE_URL e VITE_SUPABASE_PUBLISHABLE_KEY.'); setUser(null); setProfile(null); setLoading(false); return }
     setLoading(true); setError(null)
     try {
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession()
+      if (sessionError) throw sessionError
+      if (!sessionData.session) { setUser(null); setProfile(null); return }
       const { data: userData, error: userError } = await supabase.auth.getUser()
       if (userError) throw userError
       if (!userData.user) { setUser(null); setProfile(null); return }
@@ -28,7 +31,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!data.cnpj) throw new Error('Seu usuário não está vinculado a uma empresa ativa.')
       setUser(userData.user)
       setProfile({ uid: data.uid, email: data.email, name: data.name, companyId: data.cnpj, userType: data.typeUserId })
-    } catch (caught) { setUser(null); setProfile(null); setError(authErrorMessage(caught)) }
+    } catch (caught) {
+      setUser(null); setProfile(null)
+      const message = caught instanceof Error ? caught.message : String(caught)
+      setError(/auth session missing/i.test(message) ? null : authErrorMessage(caught))
+    }
     finally { setLoading(false) }
   }, [])
 
