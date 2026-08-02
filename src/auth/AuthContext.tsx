@@ -22,8 +22,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const { data: sessionData, error: sessionError } = await supabase.auth.getSession()
       if (sessionError) throw sessionError
-      if (!sessionData.session) { setUser(null); setProfile(null); return }
-      const { data: userData, error: userError } = await supabase.auth.getUser()
+      let session = sessionData.session
+      if (!session) { setUser(null); setProfile(null); return }
+      if ((session.expires_at ?? 0) * 1000 <= Date.now() + 10 * 60 * 1000) {
+        const { data: refreshed, error: refreshError } = await supabase.auth.refreshSession()
+        if (refreshError) throw refreshError
+        session = refreshed.session
+      }
+      if (!session) { setUser(null); setProfile(null); return }
+      const { data: userData, error: userError } = await supabase.auth.getUser(session.access_token)
       if (userError) throw userError
       if (!userData.user) { setUser(null); setProfile(null); return }
       const { data, error: profileError } = await supabase.from('tb_user').select('uid,email,name,cnpj,typeUserId,fg_ativo').eq('uid', userData.user.id).eq('fg_ativo', true).single()
@@ -42,11 +49,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const timer = window.setTimeout(() => void loadAuthenticatedUser(), 0)
     if (!supabase) return () => window.clearTimeout(timer)
+    let recoveryTimer: number | undefined
+    const recoverSession = () => {
+      if (document.visibilityState === 'hidden') return
+      window.clearTimeout(recoveryTimer)
+      recoveryTimer = window.setTimeout(() => void loadAuthenticatedUser(), 300)
+    }
     const { data: listener } = supabase.auth.onAuthStateChange((event) => {
-      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') void loadAuthenticatedUser()
+      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') {
+        window.clearTimeout(recoveryTimer)
+        recoveryTimer = window.setTimeout(() => void loadAuthenticatedUser(), 0)
+      }
       if (event === 'SIGNED_OUT') { setUser(null); setProfile(null); setError(null); setLoading(false) }
     })
-    return () => { window.clearTimeout(timer); listener.subscription.unsubscribe() }
+    window.addEventListener('focus', recoverSession)
+    window.addEventListener('pageshow', recoverSession)
+    window.addEventListener('online', recoverSession)
+    document.addEventListener('visibilitychange', recoverSession)
+    return () => {
+      window.clearTimeout(timer); window.clearTimeout(recoveryTimer); listener.subscription.unsubscribe()
+      window.removeEventListener('focus', recoverSession)
+      window.removeEventListener('pageshow', recoverSession)
+      window.removeEventListener('online', recoverSession)
+      document.removeEventListener('visibilitychange', recoverSession)
+    }
   }, [loadAuthenticatedUser])
 
   const signIn = useCallback(async (email: string, password: string) => {
