@@ -3,6 +3,9 @@ import { BarChart3, Blocks, CalendarClock, Clapperboard, Cloud, LayoutDashboard,
 import { ProgrammingPage } from './ProgrammingPage'
 import { useAuth, type CompanyProfile } from '../auth/auth-context'
 import { ConnectionBanner } from './ConnectionBanner'
+import { useTvData } from '../hooks/useTvData'
+import { ContentComposer } from './ContentComposer'
+import { TvSetupPage } from './TvSetupPage'
 
 const navigation = [
   ['Visão geral', LayoutDashboard], ['Canal', Radio], ['Programação', Clapperboard],
@@ -11,11 +14,12 @@ const navigation = [
   ['Relatórios', BarChart3], ['Armazenamento', Cloud], ['Configurações', Settings2],
 ] as const
 
-const contentPages = new Set(['Programação', 'Blocos', 'Campanhas', 'Intervalos', 'Grade horária'])
-
 export function AdminShell({ profile, authError }: { profile: CompanyProfile, authError: string | null }) {
   const [page, setPage] = useState('Visão geral')
+  const [selectedDisplay, setSelectedDisplay] = useState('')
+  const [composerOpen, setComposerOpen] = useState(false)
   const { signOut } = useAuth()
+  const tvData = useTvData(profile.companyId)
 
   return (
     <div className="app-shell">
@@ -33,29 +37,32 @@ export function AdminShell({ profile, authError }: { profile: CompanyProfile, au
       <main className="main">
         <ConnectionBanner />
         {authError ? <div className="connection-banner error" role="alert">{authError}</div> : null}
+        {tvData.error ? <div className="connection-banner error" role="alert">Supabase: {tvData.error}</div> : null}
         <header className="topbar">
-          <select className="channel-picker" aria-label="TV selecionada" defaultValue="all"><option value="all">Todas as TVs</option></select>
+          <div className="tv-switcher"><select className="channel-picker" aria-label="TV selecionada" value={selectedDisplay} onChange={e => setSelectedDisplay(e.target.value)}><option value="">Todas as TVs</option>{tvData.displays.map(display => <option key={display.id} value={display.id}>{display.name}</option>)}</select>{selectedDisplay ? <a className="button secondary" href={`/tv/${profile.companyId}/${selectedDisplay}`} target="_blank" rel="noreferrer">Exibir na TV</a> : null}</div>
           <div className="account-menu"><div><strong>{profile.name ?? profile.email ?? 'Usuário'}</strong><span>Empresa {profile.companyId}</span></div><div className="avatar" aria-label="Conta da empresa">{(profile.name ?? profile.email ?? 'U').slice(0, 2).toUpperCase()}</div><button className="button secondary" onClick={() => void signOut()}>Sair</button></div>
         </header>
         <div className="content">
-          {page === 'Visão geral' ? <Dashboard onCreate={() => setPage('Programação')} /> : null}
-          {contentPages.has(page) ? <ProgrammingPage section={page} /> : null}
-          {page === 'Canal' || page === 'Personalização' || page === 'Chamadas' ? <ConfigurationPage title={page} /> : null}
+          {page === 'Visão geral' ? <Dashboard displayCount={tvData.displays.length} itemCount={tvData.items.length} onCreate={() => setComposerOpen(true)} /> : null}
+          {page === 'Canal' ? <TvSetupPage companyId={profile.companyId} displays={tvData.displays} onSaved={tvData.reload}/> : null}
+          {page === 'Programação' ? <ProgrammingPage companyId={profile.companyId} displays={tvData.displays} items={tvData.items} onReload={tvData.reload}/> : null}
+          {page === 'Personalização' || page === 'Chamadas' || page === 'Blocos' || page === 'Campanhas' || page === 'Intervalos' || page === 'Grade horária' ? <ConfigurationPage title={page} onAdd={() => setComposerOpen(true)} /> : null}
           {page === 'Relatórios' ? <EmptyPage title="Relatório de exibições" description="As impressões reais aparecerão aqui após a primeira reprodução concluída." /> : null}
           {page === 'Armazenamento' ? <StoragePage /> : null}
           {page === 'Configurações' ? <ConfigurationPage title="Configurações" /> : null}
         </div>
       </main>
+      {composerOpen ? <ContentComposer companyId={profile.companyId} displays={tvData.displays} items={tvData.items} onClose={() => setComposerOpen(false)} onSaved={tvData.reload}/> : null}
     </div>
   )
 }
 
-function Dashboard({ onCreate }: { onCreate: () => void }) {
+function Dashboard({ displayCount, itemCount, onCreate }: { displayCount: number; itemCount: number; onCreate: () => void }) {
   return <>
     <div className="page-header"><div><h1>Canal de TV</h1><p>Organize a programação contínua das televisões da sua empresa.</p></div><button className="button primary" onClick={onCreate}><Plus size={17} /> Criar programação</button></div>
     <div className="cards">
-      <Stat label="TVs configuradas" value="0" detail="Nenhuma TV vinculada" />
-      <Stat label="Programações ativas" value="0" detail="Configure a primeira grade" />
+      <Stat label="TVs configuradas" value={String(displayCount)} detail={displayCount ? 'Telas vinculadas à empresa' : 'Nenhuma TV vinculada'} />
+      <Stat label="Itens em programação" value={String(itemCount)} detail={itemCount ? 'Conteúdos distribuídos nas TVs' : 'Configure o primeiro conteúdo'} />
       <Stat label="Campanhas válidas" value="0" detail="Sem campanhas cadastradas" />
       <Stat label="Exibições hoje" value="0" detail="Nenhuma impressão registrada" />
     </div>
@@ -74,12 +81,12 @@ function EmptyState({ onCreate }: { onCreate: () => void }) {
   return <div className="empty"><div><div className="empty-icon"><MonitorPlay size={23} /></div><h3>Sua TV ainda não tem programação</h3><p>Adicione somente conteúdos da sua empresa ou devidamente licenciados. Até lá, a tela pública permanecerá preta.</p><button className="button primary" onClick={onCreate}><Plus size={16} /> Montar programação</button></div></div>
 }
 
-function EmptyPage({ title, description }: { title: string, description: string }) {
-  return <><div className="page-header"><div><h1>{title}</h1><p>{description}</p></div></div><section className="card"><div className="empty"><div><div className="empty-icon"><Settings2 size={22} /></div><h3>Nenhuma configuração salva</h3><p>As configurações serão aplicadas à empresa autenticada e poderão ser sobrescritas por TV.</p><button className="button primary"><Plus size={16} /> Adicionar configuração</button></div></div></section></>
+function EmptyPage({ title, description, onAdd }: { title: string; description: string; onAdd?: () => void }) {
+  return <><div className="page-header"><div><h1>{title}</h1><p>{description}</p></div></div><section className="card"><div className="empty"><div><div className="empty-icon"><Settings2 size={22} /></div><h3>Nenhuma configuração salva</h3><p>As configurações serão aplicadas à empresa autenticada e poderão ser sobrescritas por TV.</p>{onAdd ? <button className="button primary" onClick={onAdd}><Plus size={16} /> Adicionar texto ou imagem</button> : null}</div></div></section></>
 }
 
-function ConfigurationPage({ title }: { title: string }) {
-  return <EmptyPage title={title} description="Personalize este recurso para a empresa e para cada TV selecionada." />
+function ConfigurationPage({ title, onAdd }: { title: string; onAdd?: () => void }) {
+  return <EmptyPage title={title} description="Personalize este recurso para a empresa e para cada TV selecionada." onAdd={onAdd} />
 }
 
 function StoragePage() {
