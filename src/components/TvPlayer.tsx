@@ -9,6 +9,11 @@ import type { TvPlaylistRecord } from '../hooks/useTvData'
 import { useDeploymentRefresh } from '../hooks/useDeploymentRefresh'
 
 const activationKey = (displayId: string) => `famintoos-tv:activated:${displayId}`
+const processedCallsKey = (displayId: string) => `famintoos-tv:processed-calls:${displayId}`
+
+function readProcessedCalls(displayId: string) {
+  try { return new Set<string>(JSON.parse(window.localStorage.getItem(processedCallsKey(displayId)) ?? '[]') as string[]) } catch { return new Set<string>() }
+}
 
 export function TvPlayer({ companyId, displayId }: { companyId: string, displayId: string }) {
   const [activated, setActivated] = useState(() => window.sessionStorage.getItem(activationKey(displayId)) === '1')
@@ -16,20 +21,24 @@ export function TvPlayer({ companyId, displayId }: { companyId: string, displayI
   const [index, setIndex] = useState(() => readPlayback(companyId, displayId)?.itemIndex ?? 0)
   const [interruptions, setInterruptions] = useState<Interruption[]>([])
   const [activeInterruption, setActiveInterruption] = useState<Interruption | null>(null)
+  const processedCalls = useRef(readProcessedCalls(displayId))
   const videoRef = useRef<HTMLVideoElement>(null)
 
   const load = useCallback(async () => {
     if (!supabase || !companyId || !displayId) return
-    const [programResult, playlistResult] = await Promise.all([
+    const [programResult, playlistResult, callsResult] = await Promise.all([
       supabase.rpc('get_tv_player_payload', { p_company_id: companyId, p_display_id: displayId }),
       supabase.from('tv_playlist_items').select('id,display_id,media_id,position,is_active,media:tv_media(id,title,media_type,media_url,message_text,duration_seconds,public_url,storage_provider)').eq('company_id', companyId).eq('display_id', displayId).eq('is_active', true).order('position'),
+      supabase.from('tv_calls').select('id,company_id,display_id,customer_name,call_text,requested_at').eq('company_id', companyId).eq('display_id', displayId).eq('status', 'pending').order('requested_at'),
     ])
-    if (programResult.error && playlistResult.error) return
+    if (programResult.error && playlistResult.error && callsResult.error) return
     const programPayload = programResult.data as PlayerPayload | null
     const legacyItems = ((playlistResult.data ?? []) as unknown as TvPlaylistRecord[]).map(item => ({ id: item.id, companyId, displayIds: [displayId], durationSeconds: item.media.duration_seconds ?? 10, volume: 1, muted: true, fit: 'contain' as const, resumeBehavior: 'resume' as const, active: item.is_active, media: { id: item.media.id, companyId, type: item.media.media_type, mediaUrl: item.media.media_url, publicUrl: item.media.public_url, storageProvider: item.media.storage_provider as 'cloudflare_r2' | 'supabase_storage' | 'external_url' | null, title: item.media.media_type === 'message' ? item.media.message_text : item.media.title } }))
     const known = new Set(legacyItems.map(item => item.id))
     const programItems = (programPayload?.items ?? []).filter(item => !known.has(item.id))
-    const next: PlayerPayload = { companyId, displayId, items: [...legacyItems, ...programItems], interruptions: programPayload?.interruptions ?? [], syncedAt: new Date().toISOString() }
+    const programInterruptions = (programPayload?.interruptions ?? []).filter(interruption => interruption.kind !== 'call')
+    const pendingCalls: Interruption[] = (callsResult.data ?? []).filter(call => !processedCalls.current.has(call.id)).map(call => ({ id: call.id, companyId: call.company_id, displayId: call.display_id, kind: 'call', priority: 1000, requestedAt: call.requested_at, durationSeconds: 12, title: call.call_text, subtitle: call.customer_name }))
+    const next: PlayerPayload = { companyId, displayId, items: [...legacyItems, ...programItems], interruptions: [...programInterruptions, ...pendingCalls], syncedAt: new Date().toISOString() }
     setPayload(next); setInterruptions(next.interruptions ?? []); savePayload(next)
   }, [companyId, displayId])
 
@@ -62,7 +71,11 @@ export function TvPlayer({ companyId, displayId }: { companyId: string, displayI
       savePlayback(companyId, displayId, { itemId: current?.id ?? '', itemIndex: index, elapsedSeconds: videoRef.current?.currentTime ?? 0, savedAt: new Date().toISOString() })
       videoRef.current?.pause()
       setActiveInterruption(next)
-      if (next.kind === 'call' && supabase) void supabase.from('tv_calls').update({ status: 'showing', displayed_at: new Date().toISOString() }).eq('id', next.id).eq('company_id', companyId)
+      if (next.kind === 'call') {
+        processedCalls.current.add(next.id)
+        window.localStorage.setItem(processedCallsKey(displayId), JSON.stringify(Array.from(processedCalls.current).slice(-200)))
+        void updateCall(next.id, companyId, { status: 'showing', displayed_at: new Date().toISOString() })
+      }
     }, 0)
     return () => window.clearTimeout(startTimer)
   }, [activated, activeInterruption, companyId, current?.id, displayId, index, interruptions])
@@ -74,7 +87,7 @@ export function TvPlayer({ companyId, displayId }: { companyId: string, displayI
     const timer = window.setTimeout(() => {
       setInterruptions(queue => queue.filter(i => i.id !== interruptionId))
       setActiveInterruption(null)
-      if (isCall && supabase) void supabase.from('tv_calls').update({ status: 'completed', completed_at: new Date().toISOString() }).eq('id', interruptionId).eq('company_id', companyId)
+      if (isCall) void updateCall(interruptionId, companyId, { status: 'completed', completed_at: new Date().toISOString() })
       void videoRef.current?.play()
     }, activeInterruption.durationSeconds * 1000)
     return () => window.clearTimeout(timer)
@@ -83,10 +96,22 @@ export function TvPlayer({ companyId, displayId }: { companyId: string, displayI
   useEffect(() => {
     if (!activeInterruption || activeInterruption.kind !== 'call' || !activated || !('speechSynthesis' in window)) return
     const personName = activeInterruption.subtitle?.trim() || activeInterruption.title.replace(/^Chamando\s+/i, '')
-    const utterance = new SpeechSynthesisUtterance(`Chamando ${personName}. Por favor, compareça ao atendimento.`)
-    utterance.lang = 'pt-BR'; utterance.rate = 0.9; utterance.volume = 1
-    window.speechSynthesis.cancel(); window.speechSynthesis.speak(utterance)
-    return () => window.speechSynthesis.cancel()
+    const synthesis = window.speechSynthesis
+    let spoken = false
+    const speak = () => {
+      if (spoken) return
+      spoken = true
+      const utterance = new SpeechSynthesisUtterance(`Chamando ${personName}. Por favor, compareça ao atendimento.`)
+      const voices = synthesis.getVoices()
+      utterance.voice = voices.find(voice => voice.lang.toLowerCase() === 'pt-br') ?? voices.find(voice => voice.lang.toLowerCase().startsWith('pt')) ?? null
+      utterance.lang = 'pt-BR'; utterance.rate = 0.85; utterance.pitch = 1; utterance.volume = 1
+      synthesis.cancel(); synthesis.resume(); synthesis.speak(utterance)
+      window.setTimeout(() => synthesis.resume(), 250)
+    }
+    const fallback = window.setTimeout(speak, 800)
+    if (synthesis.getVoices().length > 0) speak()
+    else synthesis.addEventListener('voiceschanged', speak, { once: true })
+    return () => { window.clearTimeout(fallback); synthesis.removeEventListener('voiceschanged', speak); synthesis.cancel() }
   }, [activated, activeInterruption])
 
   useEffect(() => {
@@ -95,11 +120,25 @@ export function TvPlayer({ companyId, displayId }: { companyId: string, displayI
     return () => window.clearTimeout(timer)
   }, [activated, activeInterruption, current, items.length])
 
-  const activate = async () => { window.sessionStorage.setItem(activationKey(displayId), '1'); setActivated(true); try { await document.documentElement.requestFullscreen?.() } catch { /* fullscreen is optional */ } }
+  const activate = async () => {
+    window.sessionStorage.setItem(activationKey(displayId), '1')
+    if ('speechSynthesis' in window) { const unlock = new SpeechSynthesisUtterance(' '); unlock.volume = 0; window.speechSynthesis.speak(unlock) }
+    setActivated(true)
+    try { await document.documentElement.requestFullscreen?.() } catch { /* fullscreen is optional */ }
+  }
   if (!activated) return <main className="tv-screen"><button className="activation" onClick={activate}>Iniciar exibição</button></main>
   if (!current) return <main className="tv-screen" aria-label="TV sem programação">{activeInterruption ? <CallOverlay interruption={activeInterruption}/> : null}</main>
 
   return <main className="tv-screen"><Media item={current} displayId={displayId} videoRef={videoRef} onEnded={() => setIndex(i => (i + 1) % items.length)} />{activeInterruption ? <CallOverlay interruption={activeInterruption}/> : null}</main>
+}
+
+async function updateCall(id: string, companyId: string, values: { status: 'showing'; displayed_at: string } | { status: 'completed'; completed_at: string }) {
+  if (!supabase) return
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const { data, error } = await supabase.from('tv_calls').update(values).eq('id', id).eq('company_id', companyId).select('id').maybeSingle()
+    if (!error && data) return
+    await new Promise(resolve => window.setTimeout(resolve, 750 * (attempt + 1)))
+  }
 }
 
 function CallOverlay({ interruption }: { interruption: Interruption }) {
