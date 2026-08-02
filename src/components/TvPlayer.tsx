@@ -6,9 +6,12 @@ import { readPayload, readPlayback, savePayload, savePlayback } from '../service
 import { selectNextInterruption } from '../services/playerQueue'
 import { supabase } from '../services/supabase'
 import type { TvPlaylistRecord } from '../hooks/useTvData'
+import { useDeploymentRefresh } from '../hooks/useDeploymentRefresh'
+
+const activationKey = (displayId: string) => `famintoos-tv:activated:${displayId}`
 
 export function TvPlayer({ companyId, displayId }: { companyId: string, displayId: string }) {
-  const [activated, setActivated] = useState(false)
+  const [activated, setActivated] = useState(() => window.sessionStorage.getItem(activationKey(displayId)) === '1')
   const [payload, setPayload] = useState<PlayerPayload | null>(() => readPayload(companyId, displayId))
   const [index, setIndex] = useState(() => readPlayback(companyId, displayId)?.itemIndex ?? 0)
   const [interruptions, setInterruptions] = useState<Interruption[]>([])
@@ -43,6 +46,13 @@ export function TvPlayer({ companyId, displayId }: { companyId: string, displayI
 
   const items = (payload?.items ?? []).filter(item => item.companyId === companyId && item.displayIds.includes(displayId) && item.active && isPlayableMedia(item.media))
   const current = items[index % Math.max(items.length, 1)]
+
+  useDeploymentRefresh(() => {
+    if (activeInterruption) return
+    savePlayback(companyId, displayId, { itemId: current?.id ?? '', itemIndex: index, elapsedSeconds: videoRef.current?.currentTime ?? 0, savedAt: new Date().toISOString() })
+    if (activated) window.sessionStorage.setItem(activationKey(displayId), '1')
+    window.location.reload()
+  })
 
   useEffect(() => {
     if (!activated || activeInterruption) return
@@ -85,7 +95,7 @@ export function TvPlayer({ companyId, displayId }: { companyId: string, displayI
     return () => window.clearTimeout(timer)
   }, [activated, activeInterruption, current, items.length])
 
-  const activate = async () => { setActivated(true); try { await document.documentElement.requestFullscreen?.() } catch { /* fullscreen is optional */ } }
+  const activate = async () => { window.sessionStorage.setItem(activationKey(displayId), '1'); setActivated(true); try { await document.documentElement.requestFullscreen?.() } catch { /* fullscreen is optional */ } }
   if (!activated) return <main className="tv-screen"><button className="activation" onClick={activate}>Iniciar exibição</button></main>
   if (!current) return <main className="tv-screen" aria-label="TV sem programação">{activeInterruption ? <CallOverlay interruption={activeInterruption}/> : null}</main>
 
