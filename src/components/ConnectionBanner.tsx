@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { CloudOff, RefreshCw } from 'lucide-react'
 import { supabase } from '../services/supabase'
+import { authenticatedFetch } from '../services/authenticatedFetch'
 
 type Status = 'checking' | 'online' | 'error'
 export function ConnectionBanner() {
@@ -8,7 +9,11 @@ export function ConnectionBanner() {
   const check = async () => {
     setState({ supabase: 'checking', r2: 'checking' })
     const databasePromise = supabase ? supabase.rpc('get_current_user_cnpj') : Promise.resolve({ error: new Error('Supabase não configurado') })
-    const r2Promise = fetch('/api/tv/media/health', { credentials: 'include' }).then(async response => response.ok ? null : new Error((await response.text()) || `HTTP ${response.status}`)).catch(error => error as Error)
+    const r2Promise = authenticatedFetch('/api/tv/media/health').then(async response => {
+      if (response.ok) return null
+      const body = await response.json().catch(() => null) as { error?: string } | null
+      return new Error(body?.error || `HTTP ${response.status}`)
+    }).catch(error => error as Error)
     const [database, r2Error] = await Promise.all([databasePromise, r2Promise])
     setState({ supabase: database.error ? 'error' : 'online', r2: r2Error ? 'error' : 'online', detail: database.error?.message ?? r2Error?.message })
   }
