@@ -5,6 +5,7 @@ import { isPlayableMedia, resolveMediaUrl } from '../services/media'
 import { readPayload, readPlayback, savePayload, savePlayback } from '../services/playerCache'
 import { selectNextInterruption } from '../services/playerQueue'
 import { supabase } from '../services/supabase'
+import type { TvPlaylistRecord } from '../hooks/useTvData'
 
 export function TvPlayer({ companyId, displayId }: { companyId: string, displayId: string }) {
   const [activated, setActivated] = useState(false)
@@ -16,10 +17,16 @@ export function TvPlayer({ companyId, displayId }: { companyId: string, displayI
 
   const load = useCallback(async () => {
     if (!supabase || !companyId || !displayId) return
-    const { data, error } = await supabase.rpc('get_tv_player_payload', { p_company_id: companyId, p_display_id: displayId })
-    if (error || !data) return
-    const next = data as PlayerPayload
-    if (next.companyId !== companyId || next.displayId !== displayId) return
+    const [programResult, playlistResult] = await Promise.all([
+      supabase.rpc('get_tv_player_payload', { p_company_id: companyId, p_display_id: displayId }),
+      supabase.from('tv_playlist_items').select('id,display_id,media_id,position,is_active,media:tv_media(id,title,media_type,media_url,message_text,duration_seconds,public_url,storage_provider)').eq('company_id', companyId).eq('display_id', displayId).eq('is_active', true).order('position'),
+    ])
+    if (programResult.error && playlistResult.error) return
+    const programPayload = programResult.data as PlayerPayload | null
+    const legacyItems = ((playlistResult.data ?? []) as unknown as TvPlaylistRecord[]).map(item => ({ id: item.id, companyId, displayIds: [displayId], durationSeconds: item.media.duration_seconds ?? 10, volume: 1, muted: true, fit: 'contain' as const, resumeBehavior: 'resume' as const, active: item.is_active, media: { id: item.media.id, companyId, type: item.media.media_type, mediaUrl: item.media.media_url, publicUrl: item.media.public_url, storageProvider: item.media.storage_provider as 'cloudflare_r2' | 'supabase_storage' | 'external_url' | null, title: item.media.media_type === 'message' ? item.media.message_text : item.media.title } }))
+    const known = new Set(legacyItems.map(item => item.id))
+    const programItems = (programPayload?.items ?? []).filter(item => !known.has(item.id))
+    const next: PlayerPayload = { companyId, displayId, items: [...legacyItems, ...programItems], interruptions: programPayload?.interruptions ?? [], syncedAt: new Date().toISOString() }
     setPayload(next); setInterruptions(next.interruptions ?? []); savePayload(next)
   }, [companyId, displayId])
 
@@ -30,7 +37,7 @@ export function TvPlayer({ companyId, displayId }: { companyId: string, displayI
   useEffect(() => {
     if (!supabase || !companyId || !displayId) return
     const client = supabase
-    const channel = client.channel(`tv:${companyId}:${displayId}`).on('postgres_changes', { event: '*', schema: 'public', table: 'tv_programs', filter: `company_id=eq.${companyId}` }, () => void load()).on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'tv_interruptions', filter: `display_id=eq.${displayId}` }, () => void load()).subscribe()
+    const channel = client.channel(`tv:${companyId}:${displayId}`).on('postgres_changes', { event: '*', schema: 'public', table: 'tv_programs', filter: `company_id=eq.${companyId}` }, () => void load()).on('postgres_changes', { event: '*', schema: 'public', table: 'tv_playlist_items', filter: `display_id=eq.${displayId}` }, () => void load()).on('postgres_changes', { event: '*', schema: 'public', table: 'tv_media', filter: `company_id=eq.${companyId}` }, () => void load()).on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'tv_interruptions', filter: `display_id=eq.${displayId}` }, () => void load()).subscribe()
     return () => { void client.removeChannel(channel) }
   }, [companyId, displayId, load])
 
