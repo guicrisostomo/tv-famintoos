@@ -15,11 +15,14 @@ export async function requestR2Upload(file: File, mediaType: string): Promise<Up
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ filename: file.name, mimeType: file.type, fileSize: file.size, mediaType }),
   })
-  if (!response.ok) throw new Error('Não foi possível autorizar o upload')
+  if (!response.ok) {
+    const detail = await response.text().catch(() => '')
+    throw new Error(`Cloudflare R2 indisponível: ${detail || `HTTP ${response.status}`}`)
+  }
   return response.json() as Promise<UploadTicket>
 }
 
 export async function uploadToR2(ticket: UploadTicket, file: File) {
   const response = await fetch(ticket.uploadUrl, { method: 'PUT', headers: { 'Content-Type': file.type }, body: file })
-  if (!response.ok) throw new Error('Falha ao enviar a mídia')
+  if (!response.ok) throw new Error(`Falha na conexão com o Cloudflare R2 (HTTP ${response.status}).`)
 }

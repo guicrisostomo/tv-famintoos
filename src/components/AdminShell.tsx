@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { BarChart3, Blocks, CalendarClock, Clapperboard, Cloud, LayoutDashboard, Megaphone, MonitorPlay, Palette, Plus, Radio, Settings2, Tv, Users } from 'lucide-react'
 import { ProgrammingPage } from './ProgrammingPage'
+import { useAuth, type CompanyProfile } from '../auth/auth-context'
+import { ConnectionBanner } from './ConnectionBanner'
 
 const navigation = [
   ['Visão geral', LayoutDashboard], ['Canal', Radio], ['Programação', Clapperboard],
@@ -11,8 +13,9 @@ const navigation = [
 
 const contentPages = new Set(['Programação', 'Blocos', 'Campanhas', 'Intervalos', 'Grade horária'])
 
-export function AdminShell() {
+export function AdminShell({ profile, authError }: { profile: CompanyProfile, authError: string | null }) {
   const [page, setPage] = useState('Visão geral')
+  const { signOut } = useAuth()
 
   return (
     <div className="app-shell">
@@ -28,9 +31,11 @@ export function AdminShell() {
         <div className="sidebar-footer">Canal de TV · conteúdo próprio ou licenciado</div>
       </aside>
       <main className="main">
+        <ConnectionBanner />
+        {authError ? <div className="connection-banner error" role="alert">{authError}</div> : null}
         <header className="topbar">
           <select className="channel-picker" aria-label="TV selecionada" defaultValue="all"><option value="all">Todas as TVs</option></select>
-          <div className="avatar" aria-label="Conta da empresa">FT</div>
+          <div className="account-menu"><div><strong>{profile.name ?? profile.email ?? 'Usuário'}</strong><span>Empresa {profile.companyId}</span></div><div className="avatar" aria-label="Conta da empresa">{(profile.name ?? profile.email ?? 'U').slice(0, 2).toUpperCase()}</div><button className="button secondary" onClick={() => void signOut()}>Sair</button></div>
         </header>
         <div className="content">
           {page === 'Visão geral' ? <Dashboard onCreate={() => setPage('Programação')} /> : null}
