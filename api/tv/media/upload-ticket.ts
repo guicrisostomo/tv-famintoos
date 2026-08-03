@@ -20,14 +20,15 @@ export default async function handler(request: VercelRequest, response: VercelRe
   if (request.method !== 'POST') return response.status(405).json({ error: 'Método não permitido.' })
   try {
     const company = await requireAuthenticatedCompany(request)
-    const { filename, mimeType, fileSize } = request.body ?? {}
+    const { filename, mimeType, fileSize, mediaType } = request.body ?? {}
     const folder = typeof mimeType === 'string' ? allowedTypes.get(mimeType) : null
     if (!folder) throw new HttpError(400, 'Tipo de arquivo não permitido.')
     if (!Number.isSafeInteger(fileSize) || fileSize <= 0 || fileSize > maxFileSize) throw new HttpError(400, 'Tamanho de arquivo inválido ou acima de 500 MB.')
     if (typeof filename !== 'string' || !filename.trim()) throw new HttpError(400, 'Nome do arquivo inválido.')
 
     const { client, bucket, publicBaseUrl } = getR2Config()
-    const storageKey = `tv/${company.companyId}/${folder}/${randomUUID()}/${safeFilename(filename)}`
+    const destination = mediaType === 'generated-promotion' && folder === 'images' ? 'generated-promotions' : folder
+    const storageKey = `tv/${company.companyId}/${destination}/${randomUUID()}/${safeFilename(filename)}`
     const uploadUrl = await getSignedUrl(client, new PutObjectCommand({ Bucket: bucket, Key: storageKey, ContentType: mimeType }), { expiresIn: 300 })
     return response.status(200).json({ uploadUrl, storageKey, publicUrl: `${publicBaseUrl}/${storageKey}`, expiresAt: new Date(Date.now() + 300_000).toISOString() })
   } catch (error) {
