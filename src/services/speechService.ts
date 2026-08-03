@@ -48,6 +48,11 @@ class SpeechService {
   private rate = 1
   private pitch = 1
   private lastError: string | null = null
+  private waitTimer: number | null = null
+  private waitResolve: (() => void) | null = null
+  private activeResolve: (() => void) | null = null
+  private resumeTimer: number | null = null
+  private generation = 0
 
   initialize() {
     if (this.ready) return this.ready
@@ -67,14 +72,15 @@ class SpeechService {
     if (!('speechSynthesis' in window)) return
     const text = renderCallSpeech(settings.template, values, settings)
     if (!text) return
-    this.cancel(); this.lastError = null
+    this.cancel(); this.lastError = null; const generation = this.generation
     for (let index = 0; index < Math.max(1, settings.repetitions); index += 1) {
+      if (generation !== this.generation) return
       await this.speak(text, settings, voices)
-      if (index + 1 < settings.repetitions) await new Promise(resolve => window.setTimeout(resolve, settings.repeatIntervalMs))
+      if (index + 1 < settings.repetitions) await new Promise<void>(resolve => { this.waitResolve = resolve; this.waitTimer = window.setTimeout(() => { this.waitTimer = null; this.waitResolve = null; resolve() }, settings.repeatIntervalMs) })
     }
   }
 
-  cancel() { if ('speechSynthesis' in window) window.speechSynthesis.cancel() }
+  cancel() { this.generation += 1; if (this.waitTimer !== null) { window.clearTimeout(this.waitTimer); this.waitTimer = null }; if (this.resumeTimer !== null) { window.clearTimeout(this.resumeTimer); this.resumeTimer = null }; this.waitResolve?.(); this.waitResolve = null; this.activeResolve?.(); this.activeResolve = null; if ('speechSynthesis' in window) window.speechSynthesis.cancel() }
   pause() { if ('speechSynthesis' in window) window.speechSynthesis.pause() }
   resume() { if ('speechSynthesis' in window) window.speechSynthesis.resume() }
   setVolume(value: number) { this.volume = Math.max(0, Math.min(1, value)) }
@@ -84,14 +90,15 @@ class SpeechService {
 
   private speak(text: string, settings: CallSpeechSettings, voices: SpeechSynthesisVoice[]) {
     return new Promise<void>(resolve => {
+      this.activeResolve = resolve
       const utterance = new SpeechSynthesisUtterance(text)
       utterance.lang = settings.language || 'pt-BR'
       utterance.voice = voices.find(voice => voice.name === settings.voiceName) ?? voices.find(voice => voice.lang.toLowerCase() === utterance.lang.toLowerCase()) ?? voices.find(voice => voice.lang.toLowerCase().startsWith('pt')) ?? null
       utterance.rate = settings.rate * this.rate; utterance.pitch = settings.pitch * this.pitch; utterance.volume = settings.volume * this.volume
-      utterance.onend = () => resolve()
-      utterance.onerror = event => { this.lastError = event.error || 'Falha ao reproduzir a voz.'; resolve() }
+      utterance.onend = () => { this.activeResolve = null; resolve() }
+      utterance.onerror = event => { this.lastError = event.error || 'Falha ao reproduzir a voz.'; this.activeResolve = null; resolve() }
       window.speechSynthesis.speak(utterance)
-      window.setTimeout(() => window.speechSynthesis.resume(), 250)
+      this.resumeTimer = window.setTimeout(() => { this.resumeTimer = null; window.speechSynthesis.resume() }, 250)
     })
   }
 }
