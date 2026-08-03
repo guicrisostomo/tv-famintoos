@@ -43,6 +43,7 @@ export interface Interruption {
   title: string
   subtitle?: string | null
   media?: TvMedia | null
+  callValues?: { customer_name?: string | null; order_number?: string | number | null; table_number?: string | number | null; call_text?: string | null; business_name?: string | null }
 }
 
 export interface PlaybackSnapshot {

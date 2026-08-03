@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { deleteMediaRecord, deleteOrphanR2Asset, isMediaUsed } from '../_lib/mediaCleanup.js'
+import { deleteMediaRecord, deleteOrphanR2Asset, isMediaUsed, isR2AssetUsed } from '../_lib/mediaCleanup.js'
 
 export const config = { maxDuration: 60 }
 
@@ -27,9 +27,7 @@ export default async function handler(request: VercelRequest, response: VercelRe
   if (assetQueryError) failures.push(`r2_assets: ${assetQueryError.message}`)
   for (const asset of assets ?? []) {
     try {
-      const { count, error: referenceError } = await supabase.from('tv_media').select('id', { count: 'exact', head: true }).eq('r2_asset_id', asset.id)
-      if (referenceError) throw referenceError
-      if ((count ?? 0) > 0) continue
+      if (await isR2AssetUsed(supabase, asset)) continue
       await deleteOrphanR2Asset(supabase, asset); orphanObjectsDeleted += 1
     } catch (cleanupError) { failures.push(`r2:${asset.id}: ${cleanupError instanceof Error ? cleanupError.message : 'erro desconhecido'}`) }
   }

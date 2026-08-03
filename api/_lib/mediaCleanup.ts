@@ -37,3 +37,14 @@ export async function deleteOrphanR2Asset(supabase: SupabaseClient, asset: R2Ass
   const { error } = await supabase.from('r2_media_assets').delete().eq('id', asset.id).eq('business_cnpj', asset.business_cnpj)
   if (error) throw error
 }
+
+export async function isR2AssetUsed(supabase: SupabaseClient, asset: R2AssetRecord) {
+  const results = await Promise.all([
+    supabase.from('tv_media').select('id', { count: 'exact', head: true }).eq('r2_asset_id', asset.id),
+    supabase.from('tv_generated_promotion_products').select('id', { count: 'exact', head: true }).eq('company_id', asset.business_cnpj).eq('image_key', asset.r2_key),
+    supabase.from('tv_generated_promotion_versions').select('id', { count: 'exact', head: true }).eq('company_id', asset.business_cnpj).eq('generated_image_key', asset.r2_key),
+  ])
+  const error = results.find(result => result.error)?.error
+  if (error) throw error
+  return results.some(result => (result.count ?? 0) > 0)
+}
