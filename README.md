@@ -11,7 +11,7 @@ npm run dev
 ```
 
 - Painel: `/`
-- Tela pública: `/tv/<company_id>/<display_id>`
+- Tela pública: `/tv/<display_id>` (a empresa é obtida da sessão autenticada). A URL antiga `/tv/<company_id>/<display_id>` continua compatível.
 
 A tela pública começa com o botão neutro **Iniciar exibição**, necessário para liberar áudio/fullscreen. Depois da ativação, sem uma programação válida, ela permanece totalmente preta.
 
@@ -34,3 +34,7 @@ Essas duas Vercel Functions estão em `api/tv/media`. O bucket R2 precisa de COR
 ## Vercel e Fire TV
 
 Na Vercel, configure `VITE_SUPABASE_URL` e `VITE_SUPABASE_PUBLISHABLE_KEY`; configure os segredos R2 apenas no backend de upload. Para Fire TV, abra a URL pública da TV, clique em **Iniciar exibição** e valide vídeo, áudio, chamada durante vídeo e retomada. O player mantém apenas um vídeo ativo, carrega o conteúdo corrente e isola o cache por empresa e TV.
+
+Um site aberto no Amazon Silk não consegue impedir completamente que o Fire TV retorne à tela inicial, encerre o navegador ou suspenda a página por inatividade: essa decisão pertence ao sistema operacional. Para operação contínua, use preferencialmente um navegador com modo quiosque e políticas de permanência de tela ou um aplicativo Android dedicado com *wake lock* e execução supervisionada. O player reduz o impacto dessas suspensões restaurando a última programação, posição e tempo do vídeo quando a página volta ao primeiro plano.
+
+O diagnóstico fica oculto em operação normal. Para uma inspeção temporária, acrescente `?diagnostic=player` à URL da TV; a tela mostra recursos aproximados, subscriptions, timers gerenciados, reconexões, último erro, última mídia e motivo do último reload.

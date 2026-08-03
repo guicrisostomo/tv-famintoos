@@ -11,7 +11,9 @@ function assetSignature(root: ParentNode) {
     .join('|')
 }
 
-export function useDeploymentRefresh(onUpdate: () => void) {
+type TimerManager = { interval: (callback: () => void, delay: number) => number; clear: (id?: number) => void }
+
+export function useDeploymentRefresh(onUpdate: () => void, timers?: TimerManager) {
   const handleUpdate = useEffectEvent(onUpdate)
 
   useEffect(() => {
@@ -32,9 +34,9 @@ export function useDeploymentRefresh(onUpdate: () => void) {
       finally { checking = false }
     }
 
-    const interval = window.setInterval(() => void check(), CHECK_INTERVAL_MS)
+    const interval = timers?.interval(() => void check(), CHECK_INTERVAL_MS) ?? window.setInterval(() => void check(), CHECK_INTERVAL_MS)
     const handleOnline = () => void check()
     window.addEventListener('online', handleOnline)
-    return () => { window.clearInterval(interval); window.removeEventListener('online', handleOnline) }
-  }, [])
+    return () => { if (timers) timers.clear(interval); else window.clearInterval(interval); window.removeEventListener('online', handleOnline) }
+  }, [timers])
 }

@@ -1,7 +1,7 @@
 import type { PlaybackSnapshot, PlayerPayload } from '../domain/tv'
 
 const CACHE_VERSION = 1
-const MAX_CACHE_AGE_MS = 24 * 60 * 60 * 1000
+const MAX_CACHE_AGE_MS = 7 * 24 * 60 * 60 * 1000
 
 function cacheKey(companyId: string, displayId: string, suffix: string) {
   return `famintoos:tv:v${CACHE_VERSION}:${companyId}:${displayId}:${suffix}`
@@ -24,6 +24,7 @@ export function readPayload(companyId: string, displayId: string): PlayerPayload
 
 export function savePlayback(companyId: string, displayId: string, state: PlaybackSnapshot) {
   localStorage.setItem(cacheKey(companyId, displayId, 'playback'), JSON.stringify(state))
+  localStorage.setItem('famintoos:tv:last-display', JSON.stringify({ companyId, displayId, savedAt: state.savedAt }))
 }
 
 export function readPlayback(companyId: string, displayId: string): PlaybackSnapshot | null {

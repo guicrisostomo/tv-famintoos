@@ -87,6 +87,14 @@ class TvAudioService {
     catch (error) { this.captureError(error, 'Falha ao iniciar o áudio da mídia.'); throw error }
   }
 
+  releaseMedia(element: HTMLMediaElement) {
+    const source = element.currentSrc || element.src
+    element.pause(); this.media.delete(element); element.removeAttribute('src'); element.load()
+    if (source.startsWith('blob:')) URL.revokeObjectURL(source)
+    if (this.loadedMedia === source) this.loadedMedia = null
+    this.emit()
+  }
+
   pauseAllAudio() { this.bell?.pause(); this.media.forEach(element => element.pause()); if ('speechSynthesis' in window) window.speechSynthesis.pause(); this.emit() }
   async resumeAudioContext() { if (this.context?.state === 'suspended') { try { await this.context.resume(); this.lastError = null } catch (error) { this.captureError(error, 'AudioContext suspenso e não pôde ser retomado.'); throw error } } this.emit() }
   setVolume(volume: number) { this.volume = Math.max(0, Math.min(1, volume)); if (this.gain) this.gain.gain.value = this.volume; this.emit() }
