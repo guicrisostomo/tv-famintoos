@@ -12,6 +12,7 @@ export default async function handler(request: VercelRequest, response: VercelRe
     const key = typeof request.body?.key === 'string' ? request.body.key : ''
     const title = typeof request.body?.title === 'string' ? request.body.title.trim() : ''
     const duration = Number(request.body?.durationSeconds)
+    const animation = ['none', 'zoom_in', 'zoom_out', 'pan_left', 'pan_right'].includes(request.body?.animation) ? request.body.animation : 'none'
     if (!key.startsWith(`tv/${company.companyId}/`) || key.includes('..')) throw new HttpError(403, 'A mídia não pertence à empresa autenticada.')
     const extension = key.split('.').at(-1)?.toLowerCase() ?? ''
     const fallbackMime = mimeByExtension[extension]
@@ -34,7 +35,7 @@ export default async function handler(request: VercelRequest, response: VercelRe
       if (assetError) throw assetError
       assetId = asset.id
     }
-    const { data: media, error: mediaError } = await company.supabase.from('tv_media').insert({ company_id: company.companyId, title: title || filename, media_type: mediaType, media_url: publicUrl, duration_seconds: Number.isFinite(duration) ? Math.max(3, Math.min(300, duration)) : 10, is_active: true, storage_provider: 'cloudflare_r2', storage_key: key, public_url: publicUrl, mime_type: mimeType, file_size: object.ContentLength ?? 0, r2_asset_id: assetId }).select('id').single()
+    const { data: media, error: mediaError } = await company.supabase.from('tv_media').insert({ company_id: company.companyId, title: title || filename, media_type: mediaType, media_url: publicUrl, duration_seconds: Number.isFinite(duration) ? Math.max(3, Math.min(300, duration)) : 10, animation: mediaType === 'image' ? animation : 'none', is_active: true, storage_provider: 'cloudflare_r2', storage_key: key, public_url: publicUrl, mime_type: mimeType, file_size: object.ContentLength ?? 0, r2_asset_id: assetId }).select('id').single()
     if (mediaError) throw mediaError
     return response.status(201).json({ mediaId: media.id, existing: false })
   } catch (error) {

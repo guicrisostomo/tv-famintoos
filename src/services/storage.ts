@@ -30,8 +30,8 @@ export async function listUnregisteredR2Objects() {
   return result.objects ?? []
 }
 
-export async function importR2Object(key: string, title: string, durationSeconds: number) {
-  const response = await authenticatedFetch('/api/tv/media/import-r2', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key, title, durationSeconds }) })
+export async function importR2Object(key: string, title: string, durationSeconds: number, animation: string) {
+  const response = await authenticatedFetch('/api/tv/media/import-r2', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key, title, durationSeconds, animation }) })
   const result = await response.json().catch(() => ({})) as { mediaId?: string; error?: string }
   if (!response.ok || !result.mediaId) throw new Error(result.error ?? `Falha ao importar mídia do R2 (HTTP ${response.status}).`)
   return result.mediaId
