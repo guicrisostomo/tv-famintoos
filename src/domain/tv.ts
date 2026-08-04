@@ -13,6 +13,7 @@ export interface TvMedia {
   storageBucket?: string | null
   mimeType?: string | null
   title?: string | null
+  animation?: 'none' | 'zoom_in' | 'zoom_out' | 'pan_left' | 'pan_right'
 }
 
 export interface ProgramItem {
