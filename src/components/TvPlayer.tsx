@@ -931,6 +931,7 @@ function Media({
   const url = resolveMediaUrl(item.media);
   const saved = readPlayback(item.companyId, displayId);
   const attachedVideo = useRef<HTMLVideoElement | null>(null);
+  const playbackStarted = useRef(false);
   const attachVideo = useCallback(
     (video: HTMLVideoElement | null) => {
       const previous = attachedVideo.current;
@@ -948,52 +949,61 @@ function Media({
     },
     [videoRef],
   );
-  const restoreAndPlay = () => {
+  const restoreAndPlay = useCallback(() => {
     const video = videoRef.current;
-    if (!video) return;
-    if (saved?.itemId === item.id) video.currentTime = saved.elapsedSeconds;
+    if (!video || playbackStarted.current) return;
+    playbackStarted.current = true;
+    if (saved?.itemId === item.id && Number.isFinite(saved.elapsedSeconds)) {
+      try {
+        video.currentTime = Math.min(
+          saved.elapsedSeconds,
+          video.duration || saved.elapsedSeconds,
+        );
+      } catch {
+        /* Some older browsers only accept currentTime after canplay. */
+      }
+    }
     video.muted = !soundEnabled || item.muted;
     video.volume = item.volume;
     void tvAudioService.playMediaAudio(video, item.volume).catch(async () => {
+      // Audible autoplay may be blocked, but visual playback must continue.
       video.muted = true;
       try {
-        await video.play();
+        await playVideo(video);
       } catch {
-        /* visual playback can also be blocked */
+        playbackStarted.current = false;
+        onError(mediaPlaybackError(video, item));
       }
     });
-  };
+  }, [item, onError, saved, soundEnabled, videoRef]);
   return (
-    <div
-      className="media-layer"
-      style={{ "--media-fit": item.fit } as React.CSSProperties}
-    >
+    <div className="media-layer">
       {item.media.type === "video" && url ? (
         <video
           ref={attachVideo}
           src={url}
           preload="auto"
+          autoPlay
           muted={!soundEnabled || item.muted}
           onLoadedMetadata={restoreAndPlay}
+          onLoadedData={restoreAndPlay}
+          onCanPlay={restoreAndPlay}
           onEnded={onEnded}
-          onError={() =>
-            onError(
-              new Error(
-                `Falha ao carregar vídeo: ${item.media.title ?? item.id}`,
-              ),
-            )
+          onError={(event) =>
+            onError(mediaPlaybackError(event.currentTarget, item))
           }
+          style={{ objectFit: "contain", objectPosition: "center" }}
           playsInline
         />
       ) : null}
       {item.media.type === "image" && url ? (
         <img
           className={`image-motion image-motion-${item.media.animation ?? "none"}`}
-          style={
-            {
-              "--motion-duration": `${item.durationSeconds}s`,
-            } as React.CSSProperties
-          }
+          style={{
+            objectFit: "contain",
+            objectPosition: "center",
+            "--motion-duration": `${item.durationSeconds}s`,
+          } as React.CSSProperties}
           src={url}
           alt={item.media.title ?? ""}
           onError={() =>
@@ -1018,5 +1028,27 @@ function Media({
         </div>
       ) : null}
     </div>
+  );
+}
+
+async function playVideo(video: HTMLVideoElement) {
+  const result = video.play();
+  if (result && typeof result.then === "function") await result;
+}
+
+function mediaPlaybackError(video: HTMLVideoElement, item: ProgramItem) {
+  const code = video.error?.code;
+  const reason =
+    code === 4
+      ? "formato incompatível (use MP4 com vídeo H.264 e áudio AAC)"
+      : code === 3
+        ? "o navegador não conseguiu decodificar o arquivo"
+        : code === 2
+          ? "falha de rede ao baixar o arquivo"
+          : code === 1
+            ? "reprodução interrompida"
+            : "reprodução bloqueada pelo navegador";
+  return new Error(
+    `Falha no vídeo ${item.media.title ?? item.id}: ${reason}.`,
   );
 }
