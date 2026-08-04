@@ -1033,6 +1033,7 @@ function Media({
           ref={attachVideo}
           src={url}
           preload="metadata"
+          autoPlay
           muted
           controls={false}
           disablePictureInPicture
