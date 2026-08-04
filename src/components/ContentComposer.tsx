@@ -30,6 +30,12 @@ interface FileInfo {
   height: number;
   duration?: number;
 }
+type AvailableMedia = R2ExistingObject & {
+  mediaId?: string;
+  source: "library" | "r2";
+  animation?: ImageAnimation;
+};
+const MEDIA_PAGE_SIZE = 12;
 
 async function sha256(file: File) {
   const digest = await crypto.subtle.digest(
@@ -95,9 +101,11 @@ export function ContentComposer({
   const [selectedDisplays, setSelectedDisplays] = useState<string[]>([]);
   const [fileInfo, setFileInfo] = useState<FileInfo | null>(null);
   const [mediaSource, setMediaSource] = useState<"upload" | "r2">("upload");
-  const [r2Objects, setR2Objects] = useState<R2ExistingObject[]>([]);
+  const [r2Objects, setR2Objects] = useState<AvailableMedia[]>([]);
   const [selectedR2Key, setSelectedR2Key] = useState("");
   const [loadingR2, setLoadingR2] = useState(false);
+  const [mediaSearch, setMediaSearch] = useState("");
+  const [mediaPage, setMediaPage] = useState(0);
   const [animation, setAnimation] = useState<ImageAnimation>("none");
   const [localPreviewUrl, setLocalPreviewUrl] = useState<string | null>(null);
   const previewObjectUrl = useRef<string | null>(null);
@@ -116,7 +124,29 @@ export function ContentComposer({
       ? localPreviewUrl
       : (r2Objects.find((item) => item.key === selectedR2Key)?.publicUrl ??
         null);
-  useEffect(() => () => { if (previewObjectUrl.current) URL.revokeObjectURL(previewObjectUrl.current) }, []);
+  const filteredObjects = useMemo(() => {
+    const term = mediaSearch.trim().toLocaleLowerCase("pt-BR");
+    return r2Objects.filter(
+      (item) =>
+        item.type === type &&
+        (!term || item.filename.toLocaleLowerCase("pt-BR").includes(term)),
+    );
+  }, [mediaSearch, r2Objects, type]);
+  const mediaPageCount = Math.max(
+    1,
+    Math.ceil(filteredObjects.length / MEDIA_PAGE_SIZE),
+  );
+  const visibleObjects = filteredObjects.slice(
+    mediaPage * MEDIA_PAGE_SIZE,
+    (mediaPage + 1) * MEDIA_PAGE_SIZE,
+  );
+  useEffect(
+    () => () => {
+      if (previewObjectUrl.current)
+        URL.revokeObjectURL(previewObjectUrl.current);
+    },
+    [],
+  );
   const toggleDisplay = (id: string) =>
     setSelectedDisplays((current) =>
       current.includes(id)
@@ -133,12 +163,15 @@ export function ContentComposer({
     setMediaSource("upload");
     setR2Objects([]);
     setSelectedR2Key("");
+    setMediaSearch("");
+    setMediaPage(0);
     setAnimation("none");
     setError(null);
   };
   const selectFile = async (nextFile: File | null) => {
     if (previewObjectUrl.current) URL.revokeObjectURL(previewObjectUrl.current);
-    previewObjectUrl.current = nextFile && type === "image" ? URL.createObjectURL(nextFile) : null;
+    previewObjectUrl.current =
+      nextFile && type === "image" ? URL.createObjectURL(nextFile) : null;
     setLocalPreviewUrl(previewObjectUrl.current);
     setFile(nextFile);
     setFileInfo(null);
@@ -161,12 +194,50 @@ export function ContentComposer({
     setLoadingR2(true);
     setError(null);
     try {
-      setR2Objects(
-        (await listUnregisteredR2Objects()).filter(
-          (item) => item.type === type,
-        ),
+      const [objects, registered] = await Promise.all([
+        listUnregisteredR2Objects(),
+        supabase!
+          .from("tv_media")
+          .select(
+            "id,title,media_type,public_url,media_url,storage_key,file_size,created_at,animation",
+          )
+          .eq("company_id", companyId)
+          .eq("media_type", type)
+          .eq("is_active", true)
+          .order("created_at", { ascending: false }),
+      ]);
+      if (registered.error) throw registered.error;
+      const library: AvailableMedia[] = (registered.data ?? []).flatMap(
+        (item) => {
+          const publicUrl = item.public_url ?? item.media_url;
+          if (
+            !publicUrl ||
+            (item.media_type !== "image" && item.media_type !== "video")
+          )
+            return [];
+          return [
+            {
+              key: `library:${item.id}`,
+              filename: item.title,
+              publicUrl,
+              size: item.file_size ?? 0,
+              lastModified: item.created_at ?? null,
+              type: item.media_type,
+              mediaId: item.id,
+              source: "library",
+              animation: item.animation as ImageAnimation | undefined,
+            },
+          ];
+        },
       );
+      const raw: AvailableMedia[] = objects.map((item) => ({
+        ...item,
+        source: "r2",
+      }));
+      setR2Objects([...library, ...raw]);
       setSelectedR2Key("");
+      setMediaSearch("");
+      setMediaPage(0);
     } catch (caught) {
       setError(
         caught instanceof Error
@@ -204,13 +275,26 @@ export function ContentComposer({
       let storageKey: string | null = null;
       let r2AssetId: number | null = null;
       let mediaId: string | null = null;
-      if (type !== "message" && mediaSource === "r2")
-        mediaId = await importR2Object(
-          selectedR2Key,
-          title,
-          duration,
-          type === "image" ? animation : "none",
-        );
+      if (type !== "message" && mediaSource === "r2") {
+        const selected = r2Objects.find((item) => item.key === selectedR2Key);
+        if (!selected)
+          throw new Error("A mídia selecionada não está mais disponível.");
+        if (selected.mediaId) {
+          mediaId = selected.mediaId;
+          const { error: updateError } = await supabase
+            .from("tv_media")
+            .update({ animation: type === "image" ? animation : "none" })
+            .eq("id", mediaId)
+            .eq("company_id", companyId);
+          if (updateError) throw updateError;
+        } else
+          mediaId = await importR2Object(
+            selected.key,
+            title,
+            duration,
+            type === "image" ? animation : "none",
+          );
+      }
       if (type !== "message" && mediaSource === "upload" && file) {
         const ticket = await requestR2Upload(file, type);
         if (!ticket.publicUrl)
@@ -424,7 +508,7 @@ export function ContentComposer({
                       }}
                     >
                       <Cloud size={17} />
-                      Usar mídia do R2
+                      Escolher da biblioteca
                     </button>
                   </div>
                   {mediaSource === "upload" ? (
@@ -454,12 +538,15 @@ export function ContentComposer({
                   ) : (
                     <div className="r2-picker">
                       <div className="r2-picker-header">
-                        <span>Mídias ainda não cadastradas</span>
+                        <span>
+                          Biblioteca disponível · {filteredObjects.length}{" "}
+                          item(ns)
+                        </span>
                         <button
                           type="button"
                           className="icon-button"
                           onClick={() => void loadR2()}
-                          aria-label="Atualizar mídias do R2"
+                          aria-label="Atualizar biblioteca de mídias"
                         >
                           <RefreshCw
                             className={loadingR2 ? "spin" : ""}
@@ -467,43 +554,90 @@ export function ContentComposer({
                           />
                         </button>
                       </div>
+                      <input
+                        className="media-library-search"
+                        type="search"
+                        value={mediaSearch}
+                        onChange={(event) => {
+                          setMediaSearch(event.target.value);
+                          setMediaPage(0);
+                        }}
+                        placeholder={`Buscar ${type === "video" ? "vídeos" : "imagens"} pelo nome`}
+                        aria-label="Buscar na biblioteca de mídias"
+                      />
                       {loadingR2 ? (
-                        <p>Consultando o R2...</p>
-                      ) : r2Objects.length ? (
-                        <div className="r2-object-grid">
-                          {r2Objects.map((object) => (
+                        <p>Consultando biblioteca e R2...</p>
+                      ) : visibleObjects.length ? (
+                        <>
+                          <div className="r2-object-grid">
+                            {visibleObjects.map((object) => (
+                              <button
+                                type="button"
+                                key={object.key}
+                                className={
+                                  selectedR2Key === object.key ? "selected" : ""
+                                }
+                                onClick={() => {
+                                  setSelectedR2Key(object.key);
+                                  setAnimation(object.animation ?? "none");
+                                  setTitle(
+                                    (current) => current || object.filename,
+                                  );
+                                }}
+                              >
+                                {object.type === "image" ? (
+                                  <img src={object.publicUrl} alt="" />
+                                ) : (
+                                  <video
+                                    src={object.publicUrl}
+                                    preload="metadata"
+                                    muted
+                                    playsInline
+                                  />
+                                )}
+                                <span>{object.filename}</span>
+                                <small>
+                                  {object.source === "library"
+                                    ? "Biblioteca"
+                                    : "R2 · ainda não cadastrada"}
+                                </small>
+                              </button>
+                            ))}
+                          </div>
+                          <div className="media-pagination">
                             <button
                               type="button"
-                              key={object.key}
-                              className={
-                                selectedR2Key === object.key ? "selected" : ""
+                              className="button secondary"
+                              disabled={mediaPage === 0}
+                              onClick={() =>
+                                setMediaPage((page) => Math.max(0, page - 1))
                               }
-                              onClick={() => {
-                                setSelectedR2Key(object.key);
-                                setTitle(
-                                  (current) => current || object.filename,
-                                );
-                              }}
                             >
-                              {object.type === "image" ? (
-                                <img src={object.publicUrl} alt="" />
-                              ) : (
-                                <video
-                                  src={object.publicUrl}
-                                  preload="metadata"
-                                  muted
-                                  playsInline
-                                />
-                              )}
-                              <span>{object.filename}</span>
+                              Anterior
                             </button>
-                          ))}
-                        </div>
+                            <span>
+                              Página {mediaPage + 1} de {mediaPageCount}
+                            </span>
+                            <button
+                              type="button"
+                              className="button secondary"
+                              disabled={mediaPage + 1 >= mediaPageCount}
+                              onClick={() =>
+                                setMediaPage((page) =>
+                                  Math.min(mediaPageCount - 1, page + 1),
+                                )
+                              }
+                            >
+                              Próxima
+                            </button>
+                          </div>
+                        </>
                       ) : (
                         <p>
-                          Nenhuma mídia{" "}
-                          {type === "video" ? "de vídeo" : "de imagem"} pendente
-                          de cadastro.
+                          Nenhuma{" "}
+                          {type === "video" ? "mídia de vídeo" : "imagem"}{" "}
+                          disponível para esta empresa
+                          {mediaSearch ? " com essa busca" : ""}.
                         </p>
                       )}
                     </div>
@@ -512,20 +646,50 @@ export function ContentComposer({
                     <div className="animation-editor">
                       <label>
                         Animação da imagem
-                        <select value={animation} onChange={(event) => setAnimation(event.target.value as ImageAnimation)}>
+                        <select
+                          value={animation}
+                          onChange={(event) =>
+                            setAnimation(event.target.value as ImageAnimation)
+                          }
+                        >
                           <option value="none">Sem animação</option>
-                          <option value="zoom_in">Zoom suave aproximando</option>
+                          <option value="zoom_in">
+                            Zoom suave aproximando
+                          </option>
                           <option value="zoom_out">Zoom suave afastando</option>
-                          <option value="pan_left">Movimento para a esquerda</option>
-                          <option value="pan_right">Movimento para a direita</option>
+                          <option value="pan_left">
+                            Movimento para a esquerda
+                          </option>
+                          <option value="pan_right">
+                            Movimento para a direita
+                          </option>
                         </select>
                       </label>
                       {previewUrl ? (
                         <div className="image-motion-preview">
-                          <img key={`${previewUrl}-${animation}`} className={`image-motion image-motion-${animation}`} style={{ "--motion-duration": `${duration}s` } as React.CSSProperties} src={previewUrl} alt="Prévia da animação selecionada" />
-                          <span>Prévia · {animation === "none" ? "sem animação" : "movimento contínuo durante a exibição"}</span>
+                          <img
+                            key={`${previewUrl}-${animation}`}
+                            className={`image-motion image-motion-${animation}`}
+                            style={
+                              {
+                                "--motion-duration": `${duration}s`,
+                              } as React.CSSProperties
+                            }
+                            src={previewUrl}
+                            alt="Prévia da animação selecionada"
+                          />
+                          <span>
+                            Prévia ·{" "}
+                            {animation === "none"
+                              ? "sem animação"
+                              : "movimento contínuo durante a exibição"}
+                          </span>
                         </div>
-                      ) : <p className="form-hint">Selecione uma imagem para visualizar a animação.</p>}
+                      ) : (
+                        <p className="form-hint">
+                          Selecione uma imagem para visualizar a animação.
+                        </p>
+                      )}
                     </div>
                   ) : null}
                   <div
