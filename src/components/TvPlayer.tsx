@@ -949,50 +949,62 @@ function Media({
     },
     [videoRef],
   );
-  const restoreAndPlay = useCallback(() => {
+  const restoreAndPlay = useCallback(async () => {
     const video = videoRef.current;
     if (!video || playbackStarted.current) return;
-    playbackStarted.current = true;
     if (saved?.itemId === item.id && Number.isFinite(saved.elapsedSeconds)) {
       try {
-        video.currentTime = Math.min(
-          saved.elapsedSeconds,
-          video.duration || saved.elapsedSeconds,
+        const lastPlayableSecond = Number.isFinite(video.duration)
+          ? Math.max(0, video.duration - 0.25)
+          : saved.elapsedSeconds;
+        video.currentTime = Math.max(
+          0,
+          Math.min(saved.elapsedSeconds, lastPlayableSecond),
         );
       } catch {
         /* Some older browsers only accept currentTime after canplay. */
       }
     }
-    video.muted = !soundEnabled || item.muted;
     video.volume = item.volume;
-    void tvAudioService.playMediaAudio(video, item.volume).catch(async () => {
-      // Audible autoplay may be blocked, but visual playback must continue.
-      video.muted = true;
+    // Always start the visual track muted. Amazon Silk can reject the whole
+    // play() request when sound is enabled, even after a previous unlock.
+    video.muted = true;
+    try {
+      await playVideo(video);
+      playbackStarted.current = true;
+    } catch {
+      onError(mediaPlaybackError(video, item));
+      return;
+    }
+    if (soundEnabled && !item.muted) {
+      video.muted = false;
       try {
-        await playVideo(video);
+        await tvAudioService.playMediaAudio(video, item.volume);
       } catch {
-        playbackStarted.current = false;
-        onError(mediaPlaybackError(video, item));
+        // Keep the picture running if audible playback is blocked.
+        video.muted = true;
+        if (video.paused) void playVideo(video).catch(() => undefined);
       }
-    });
+    }
   }, [item, onError, saved, soundEnabled, videoRef]);
   return (
-    <div className="media-layer">
+    <div
+      className="media-layer"
+      style={{ "--media-fit": item.fit } as React.CSSProperties}
+    >
       {item.media.type === "video" && url ? (
         <video
           ref={attachVideo}
           src={url}
-          preload="auto"
-          autoPlay
-          muted={!soundEnabled || item.muted}
-          onLoadedMetadata={restoreAndPlay}
-          onLoadedData={restoreAndPlay}
-          onCanPlay={restoreAndPlay}
+          preload="metadata"
+          muted
+          onLoadedMetadata={() => void restoreAndPlay()}
+          onLoadedData={() => void restoreAndPlay()}
+          onCanPlay={() => void restoreAndPlay()}
           onEnded={onEnded}
           onError={(event) =>
             onError(mediaPlaybackError(event.currentTarget, item))
           }
-          style={{ objectFit: "contain", objectPosition: "center" }}
           playsInline
         />
       ) : null}
