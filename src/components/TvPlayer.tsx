@@ -89,6 +89,37 @@ export function TvPlayer({
   );
 
   useEffect(() => {
+    const root = document.documentElement;
+    const userAgent = navigator.userAgent.toLowerCase();
+    const isFullyKiosk =
+      userAgent.includes("fully") || "fully" in window;
+    const updateViewport = () => {
+      const viewport = window.visualViewport;
+      root.style.setProperty(
+        "--tv-viewport-width",
+        `${Math.round(viewport?.width ?? window.innerWidth)}px`,
+      );
+      root.style.setProperty(
+        "--tv-viewport-height",
+        `${Math.round(viewport?.height ?? window.innerHeight)}px`,
+      );
+    };
+    root.classList.toggle("fully-kiosk", isFullyKiosk);
+    updateViewport();
+    window.addEventListener("resize", updateViewport);
+    window.addEventListener("orientationchange", updateViewport);
+    window.visualViewport?.addEventListener("resize", updateViewport);
+    return () => {
+      root.classList.remove("fully-kiosk");
+      root.style.removeProperty("--tv-viewport-width");
+      root.style.removeProperty("--tv-viewport-height");
+      window.removeEventListener("resize", updateViewport);
+      window.removeEventListener("orientationchange", updateViewport);
+      window.visualViewport?.removeEventListener("resize", updateViewport);
+    };
+  }, []);
+
+  useEffect(() => {
     tvAudioService.initializeAudio();
     void speechService.initialize();
     const unsubscribe = tvAudioService.subscribe(setAudioDiagnostics);
@@ -435,8 +466,13 @@ export function TvPlayer({
       void load();
       void tvAudioService.resumeAudioContext();
       const video = videoRef.current;
-      if (video && current?.media.type === "video")
-        void video.play().catch(() => undefined);
+      if (video && current?.media.type === "video" && video.paused)
+        void video.play().catch(() => {
+          // Fully/Android WebView may revoke audible autoplay after the app
+          // returns from the background. Resume the picture without sound.
+          video.muted = true;
+          void video.play().catch((error) => runtime.error(error));
+        });
     };
     const hide = () => {
       runtime.lifecycle("background");
@@ -998,6 +1034,8 @@ function Media({
           src={url}
           preload="metadata"
           muted
+          controls={false}
+          disablePictureInPicture
           onLoadedMetadata={() => void restoreAndPlay()}
           onLoadedData={() => void restoreAndPlay()}
           onCanPlay={() => void restoreAndPlay()}
