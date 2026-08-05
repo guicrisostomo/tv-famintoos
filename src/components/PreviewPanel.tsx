@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Pause, Play, SkipForward } from "lucide-react";
+import { Download, Pause, Play, SkipForward } from "lucide-react";
 import type { TvPlaylistRecord } from "../hooks/useTvData";
 
 export function PreviewPanel({ items }: { items: TvPlaylistRecord[] }) {
@@ -74,7 +74,92 @@ export function PreviewPanel({ items }: { items: TvPlaylistRecord[] }) {
         >
           <SkipForward size={15} /> Próximo item
         </button>
+        {current?.media_type === "image" && imageUrl ? (
+          <button
+            className="button secondary"
+            onClick={() =>
+              void exportTvImage(
+                imageUrl,
+                current.title,
+                currentItem.image_fit ?? "contain",
+              )
+            }
+          >
+            <Download size={15} /> Salvar imagem 16:9
+          </button>
+        ) : null}
       </div>
     </section>
   );
+}
+
+async function exportTvImage(
+  url: string,
+  title: string,
+  fit: NonNullable<TvPlaylistRecord["image_fit"]>,
+) {
+  const response = await fetch(url, { mode: "cors" });
+  if (!response.ok) throw new Error(`Imagem indisponível (${response.status}).`);
+  const bitmap = await createImageBitmap(await response.blob());
+  try {
+    const canvas = document.createElement("canvas");
+    canvas.width = 1920;
+    canvas.height = 1080;
+    const context = canvas.getContext("2d");
+    if (!context) throw new Error("Não foi possível preparar a imagem.");
+    context.fillStyle = "#000";
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    if (fit === "blur_background") {
+      context.save();
+      context.filter = "blur(28px) brightness(42%) saturate(82%)";
+      drawFitted(context, bitmap, canvas.width, canvas.height, "cover", 1.08);
+      context.restore();
+      context.fillStyle = "rgba(0,0,0,.22)";
+      context.fillRect(0, 0, canvas.width, canvas.height);
+      drawFitted(context, bitmap, canvas.width, canvas.height, "contain");
+    } else {
+      drawFitted(context, bitmap, canvas.width, canvas.height, fit);
+    }
+    const blob = await new Promise<Blob>((resolve, reject) =>
+      canvas.toBlob(
+        (result) => result ? resolve(result) : reject(new Error("Falha ao gerar a imagem.")),
+        "image/webp",
+        .92,
+      ),
+    );
+    const objectUrl = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = objectUrl;
+    link.download = `${safeFilename(title)}-tv-1920x1080.webp`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1_000);
+  } finally {
+    bitmap.close();
+  }
+}
+
+function drawFitted(
+  context: CanvasRenderingContext2D,
+  image: ImageBitmap,
+  width: number,
+  height: number,
+  fit: "contain" | "cover" | "fill",
+  scale = 1,
+) {
+  if (fit === "fill") {
+    context.drawImage(image, 0, 0, width, height);
+    return;
+  }
+  const ratio = fit === "cover"
+    ? Math.max(width / image.width, height / image.height)
+    : Math.min(width / image.width, height / image.height);
+  const targetWidth = image.width * ratio * scale;
+  const targetHeight = image.height * ratio * scale;
+  context.drawImage(image, (width - targetWidth) / 2, (height - targetHeight) / 2, targetWidth, targetHeight);
+}
+
+function safeFilename(value: string) {
+  return value.trim().replace(/[\\/:*?"<>|]+/g, "-").replace(/\s+/g, " ") || "imagem";
 }

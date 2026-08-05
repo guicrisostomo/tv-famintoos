@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { DndContext, type DragEndEvent, PointerSensor, useSensor, useSensors } from '@dnd-kit/core'
 import { arrayMove, SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { ExternalLink, GripVertical, Pencil, Plus, Trash2 } from 'lucide-react'
+import { Download, ExternalLink, GripVertical, MessageSquareText, Pencil, Plus, Trash2, Video } from 'lucide-react'
 import type { TvDisplayRecord, TvPlaylistRecord } from '../hooks/useTvData'
 import { supabase } from '../services/supabase'
 import { ContentComposer } from './ContentComposer'
@@ -39,5 +39,40 @@ export function ProgrammingPage({ companyId, displays, items, onReload }: { comp
 function SortableItem({ item, onEdit, onRemove }: { item: TvPlaylistRecord; onEdit: (item: TvPlaylistRecord) => void; onRemove: (id: string) => Promise<void> }) {
   const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: item.id })
   const typeLabel = item.media.media_type === 'message' ? 'Texto' : item.media.media_type === 'video' ? 'Vídeo' : 'Imagem'
-  return <div ref={setNodeRef} className="timeline-item" style={{ transform: CSS.Transform.toString(transform), transition }}><button className="drag button" aria-label={`Reordenar ${item.media.title}`} {...attributes} {...listeners}><GripVertical size={18}/></button><div><strong>{item.media.title}</strong><span>{typeLabel} · {item.media.duration_seconds ?? 10} s</span></div><div className="timeline-actions"><button className="icon-button" onClick={() => onEdit(item)} aria-label={`Editar ${item.media.title}`}><Pencil size={16}/></button><button className="icon-button danger" onClick={() => void onRemove(item.id)} aria-label={`Remover ${item.media.title}`}><Trash2 size={16}/></button></div></div>
+  const mediaUrl = item.media.public_url ?? item.media.media_url
+  return <div ref={setNodeRef} className="timeline-item" style={{ transform: CSS.Transform.toString(transform), transition }}><button className="drag button" aria-label={`Reordenar ${item.media.title}`} {...attributes} {...listeners}><GripVertical size={18}/></button><MediaThumbnail item={item} url={mediaUrl}/><div className="timeline-copy"><strong>{item.media.title}</strong><span>{typeLabel} · {item.media.duration_seconds ?? 10} s</span>{item.media.media_type === 'message' && item.media.message_text ? <small>{item.media.message_text}</small> : null}</div><div className="timeline-actions">{item.media.media_type === 'image' && mediaUrl ? <button className="icon-button" onClick={() => void downloadImage(mediaUrl, item.media.title)} aria-label={`Baixar ${item.media.title}`} title="Salvar imagem no dispositivo"><Download size={16}/></button> : null}<button className="icon-button" onClick={() => onEdit(item)} aria-label={`Editar ${item.media.title}`}><Pencil size={16}/></button><button className="icon-button danger" onClick={() => void onRemove(item.id)} aria-label={`Remover ${item.media.title}`}><Trash2 size={16}/></button></div></div>
+}
+
+function MediaThumbnail({ item, url }: { item: TvPlaylistRecord; url: string | null }) {
+  if (item.media.media_type === 'image' && url) return <img className="timeline-thumbnail" src={url} alt="" loading="lazy"/>
+  if (item.media.media_type === 'video' && url) return <div className="timeline-thumbnail thumbnail-video"><video src={url} preload="metadata" muted playsInline/><Video size={15}/></div>
+  return <div className="timeline-thumbnail thumbnail-text" aria-hidden="true"><MessageSquareText size={18}/></div>
+}
+
+async function downloadImage(url: string, title: string) {
+  const safeName = title.trim().replace(/[\\/:*?"<>|]+/g, '-').replace(/\s+/g, ' ') || 'imagem'
+  const extension = new URL(url, window.location.href).pathname.split('.').pop()?.toLowerCase()
+  const filename = /^(jpe?g|png|webp|gif|avif)$/.test(extension ?? '') ? `${safeName}.${extension}` : `${safeName}.jpg`
+  try {
+    const response = await fetch(url, { mode: 'cors' })
+    if (!response.ok) throw new Error(`Download indisponível (${response.status})`)
+    const objectUrl = URL.createObjectURL(await response.blob())
+    triggerDownload(objectUrl, filename)
+    window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1_000)
+  } catch {
+    const link = document.createElement('a')
+    link.href = url
+    link.target = '_blank'
+    link.rel = 'noreferrer'
+    link.click()
+  }
+}
+
+function triggerDownload(url: string, filename: string) {
+  const link = document.createElement('a')
+  link.href = url
+  link.download = filename
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
 }
