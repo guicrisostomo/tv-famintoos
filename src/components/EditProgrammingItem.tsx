@@ -3,6 +3,7 @@ import { Check, LoaderCircle, X } from "lucide-react";
 import type {
   ImageAnimation,
   TvDisplayRecord,
+  TvImageFit,
   TvPlaylistRecord,
 } from "../hooks/useTvData";
 import { supabase } from "../services/supabase";
@@ -30,6 +31,9 @@ export function EditProgrammingItem({
   const [duration, setDuration] = useState(item.media.duration_seconds ?? 10);
   const [animation, setAnimation] = useState<ImageAnimation>(
     item.media.animation ?? "none",
+  );
+  const [imageFit, setImageFit] = useState<TvImageFit>(
+    item.image_fit ?? "contain",
   );
   const [displayIds, setDisplayIds] = useState(() =>
     Array.from(new Set(mediaItems.map((candidate) => candidate.display_id))),
@@ -79,6 +83,20 @@ export function EditProgrammingItem({
       if (mediaError) throw mediaError;
       if (!updatedMedia)
         throw new Error("Conteúdo não encontrado ou edição não autorizada.");
+      if (mediaItems.length) {
+        const { error: fitError } = await supabase
+          .from("tv_playlist_items")
+          .update({
+            image_fit:
+              item.media.media_type === "image" ? imageFit : "contain",
+          })
+          .eq("company_id", companyId)
+          .in(
+            "id",
+            mediaItems.map((candidate) => candidate.id),
+          );
+        if (fitError) throw fitError;
+      }
       const currentDisplays = new Set(
         mediaItems.map((candidate) => candidate.display_id),
       );
@@ -115,6 +133,8 @@ export function EditProgrammingItem({
               company_id: companyId,
               display_id: displayId,
               media_id: item.media_id,
+              image_fit:
+                item.media.media_type === "image" ? imageFit : "contain",
               position: (maxPositions.get(displayId) ?? -1) + 1,
               is_active: true,
             })),
@@ -159,10 +179,18 @@ export function EditProgrammingItem({
         <form onSubmit={save}>
           <div className="editor-form">
             {url && item.media.media_type === "image" ? (
-              <div className="image-motion-preview">
+              <div className={`image-motion-preview image-fit-${imageFit}`}>
+                {imageFit === "blur_background" ? (
+                  <img
+                    className="preview-blurred-background"
+                    src={url}
+                    alt=""
+                    aria-hidden="true"
+                  />
+                ) : null}
                 <img
                   key={animation}
-                  className={`image-motion image-motion-${animation}`}
+                  className={`preview-main-image image-motion image-motion-${animation}`}
                   style={
                     {
                       "--motion-duration": `${duration}s`,
@@ -204,6 +232,28 @@ export function EditProgrammingItem({
                 required
               />
             </label>
+            {item.media.media_type === "image" ? (
+              <label>
+                Ajuste para a tela da TV
+                <select
+                  value={imageFit}
+                  onChange={(event) =>
+                    setImageFit(event.target.value as TvImageFit)
+                  }
+                >
+                  <option value="contain">
+                    Mostrar arte inteira com fundo preto
+                  </option>
+                  <option value="blur_background">
+                    Arte central com fundo desfocado
+                  </option>
+                  <option value="cover">
+                    Preencher a tela cortando as bordas
+                  </option>
+                  <option value="fill">Esticar para preencher</option>
+                </select>
+              </label>
+            ) : null}
             {item.media.media_type === "image" ? (
               <label>
                 Animação

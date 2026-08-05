@@ -13,6 +13,7 @@ import {
 import type {
   ImageAnimation,
   TvDisplayRecord,
+  TvImageFit,
   TvPlaylistRecord,
 } from "../hooks/useTvData";
 import {
@@ -107,6 +108,7 @@ export function ContentComposer({
   const [mediaSearch, setMediaSearch] = useState("");
   const [mediaPage, setMediaPage] = useState(0);
   const [animation, setAnimation] = useState<ImageAnimation>("none");
+  const [imageFit, setImageFit] = useState<TvImageFit>("contain");
   const [localPreviewUrl, setLocalPreviewUrl] = useState<string | null>(null);
   const previewObjectUrl = useRef<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -166,6 +168,7 @@ export function ContentComposer({
     setMediaSearch("");
     setMediaPage(0);
     setAnimation("none");
+    setImageFit("contain");
     setError(null);
   };
   const selectFile = async (nextFile: File | null) => {
@@ -373,6 +376,7 @@ export function ContentComposer({
         media_id: mediaId,
         position: (maxPosition.get(displayId) ?? -1) + 1,
         is_active: true,
+        image_fit: type === "image" ? imageFit : "contain",
       }));
       const { error: playlistError } = await supabase
         .from("tv_playlist_items")
@@ -645,6 +649,18 @@ export function ContentComposer({
                   {type === "image" ? (
                     <div className="animation-editor">
                       <label>
+                        Ajuste para a tela da TV
+                        <select
+                          value={imageFit}
+                          onChange={(event) => setImageFit(event.target.value as TvImageFit)}
+                        >
+                          <option value="contain">Mostrar arte inteira com fundo preto</option>
+                          <option value="blur_background">Arte central com fundo desfocado</option>
+                          <option value="cover">Preencher a tela cortando as bordas</option>
+                          <option value="fill">Esticar para preencher</option>
+                        </select>
+                      </label>
+                      <label>
                         Animação da imagem
                         <select
                           value={animation}
@@ -666,10 +682,13 @@ export function ContentComposer({
                         </select>
                       </label>
                       {previewUrl ? (
-                        <div className="image-motion-preview">
+                        <div className={`image-motion-preview image-fit-${imageFit}`}>
+                          {imageFit === "blur_background" ? (
+                            <img className="preview-blurred-background" src={previewUrl} alt="" aria-hidden="true" />
+                          ) : null}
                           <img
                             key={`${previewUrl}-${animation}`}
-                            className={`image-motion image-motion-${animation}`}
+                            className={`preview-main-image image-motion image-motion-${animation}`}
                             style={
                               {
                                 "--motion-duration": `${duration}s`,

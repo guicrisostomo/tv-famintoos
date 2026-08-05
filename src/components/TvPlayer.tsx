@@ -169,7 +169,7 @@ export function TvPlayer({
         supabase
           .from("tv_playlist_items")
           .select(
-            "id,display_id,media_id,position,is_active,media:tv_media(id,title,media_type,media_url,message_text,duration_seconds,public_url,storage_provider,animation,starts_at,ends_at,weekdays,start_time,end_time)",
+            "id,display_id,media_id,position,is_active,image_fit,media:tv_media(id,title,media_type,media_url,message_text,duration_seconds,public_url,storage_provider,animation,starts_at,ends_at,weekdays,start_time,end_time)",
           )
           .eq("company_id", companyId)
           .eq("display_id", displayId)
@@ -238,7 +238,7 @@ export function TvPlayer({
           durationSeconds: item.media.duration_seconds ?? 10,
           volume: 1,
           muted: !nextSoundEnabled,
-          fit: "contain" as const,
+          fit: item.image_fit ?? "contain",
           resumeBehavior: "resume" as const,
           active: item.is_active,
           media: {
@@ -1082,23 +1082,26 @@ function Media({
         />
       ) : null}
       {item.media.type === "image" && url ? (
-        <img
-          className={`image-motion image-motion-${item.media.animation ?? "none"}`}
-          style={{
-            objectFit: "contain",
-            objectPosition: "center",
-            "--motion-duration": `${item.durationSeconds}s`,
-          } as React.CSSProperties}
-          src={url}
-          alt={item.media.title ?? ""}
-          onError={() =>
-            onError(
-              new Error(
-                `Falha ao carregar imagem: ${item.media.title ?? item.id}`,
-              ),
-            )
-          }
-        />
+        <>
+          {item.fit === "blur_background" ? (
+            <img className="media-blurred-background" src={url} alt="" aria-hidden="true" />
+          ) : null}
+          <img
+            className={`media-main-image ${item.fit === "blur_background" ? "media-main-image-centered" : ""} image-motion image-motion-${item.media.animation ?? "none"}`}
+            style={{
+              "--motion-duration": `${item.durationSeconds}s`,
+            } as React.CSSProperties}
+            src={url}
+            alt={item.media.title ?? ""}
+            onError={() =>
+              onError(
+                new Error(
+                  `Falha ao carregar imagem: ${item.media.title ?? item.id}`,
+                ),
+              )
+            }
+          />
+        </>
       ) : null}
       {item.media.type === "message" ? (
         <div className="message-content">{item.media.title}</div>

@@ -24,7 +24,7 @@ export interface ProgramItem {
   durationSeconds: number
   volume: number
   muted: boolean
-  fit: 'contain' | 'cover' | 'fill'
+  fit: 'contain' | 'cover' | 'fill' | 'blur_background'
   resumeBehavior: 'resume' | 'restart'
   active: boolean
   overlayText?: string | null

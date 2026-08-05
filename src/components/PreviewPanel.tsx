@@ -5,7 +5,8 @@ import type { TvPlaylistRecord } from "../hooks/useTvData";
 export function PreviewPanel({ items }: { items: TvPlaylistRecord[] }) {
   const [index, setIndex] = useState(0);
   const [playing, setPlaying] = useState(false);
-  const current = items[index % Math.max(items.length, 1)]?.media;
+  const currentItem = items[index % Math.max(items.length, 1)];
+  const current = currentItem?.media;
   const imageUrl = current?.public_url ?? current?.media_url;
   const next = () =>
     setIndex((value) => (value + 1) % Math.max(items.length, 1));
@@ -37,13 +38,18 @@ export function PreviewPanel({ items }: { items: TvPlaylistRecord[] }) {
             Nenhuma mídia válida configurada
           </div>
         ) : current.media_type === "image" && imageUrl ? (
-          <img
-            key={`${current.id}-${index}`}
-            className={`image-motion image-motion-${playing ? current.animation ?? "none" : "none"}`}
-            style={{ "--motion-duration": `${current.duration_seconds ?? 10}s` } as React.CSSProperties}
-            src={imageUrl}
-            alt={current.title}
-          />
+          <>
+            {currentItem.image_fit === "blur_background" ? (
+              <img className="preview-blurred-background" src={imageUrl} alt="" aria-hidden="true" />
+            ) : null}
+            <img
+              key={`${current.id}-${index}`}
+              className={`preview-main-image image-fit-${currentItem.image_fit ?? "contain"} image-motion image-motion-${playing ? current.animation ?? "none" : "none"}`}
+              style={{ "--motion-duration": `${current.duration_seconds ?? 10}s` } as React.CSSProperties}
+              src={imageUrl}
+              alt={current.title}
+            />
+          </>
         ) : current.media_type === "video" && imageUrl ? (
           <video src={imageUrl} autoPlay={playing} muted playsInline controls />
         ) : current.media_type === "message" ? (

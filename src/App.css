@@ -44,7 +44,7 @@
 .timeline-item strong { display: block; font-size: 14px; }.timeline-item span { color: var(--muted); font-size: 12px; }
 .timeline-actions { display: flex; align-items: center; gap: 6px; }
 .badge { border-radius: 999px; padding: 4px 8px; font-size: 11px; font-weight: 700; background: var(--green-100); color: var(--green-700); }
-.preview { aspect-ratio: 16 / 9; border-radius: 12px; overflow: hidden; background: #080b09; display: grid; place-items: center; }
+.preview { position: relative; aspect-ratio: 16 / 9; border-radius: 12px; overflow: hidden; background: #080b09; display: grid; place-items: center; }
 .preview-placeholder { text-align: center; color: #77817c; font-size: 13px; }
 .preview > img { width: 100%; height: 100%; object-fit: contain; }
 .preview-message { color: white; padding: 8%; text-align: center; font: 700 clamp(20px, 3vw, 44px) Manrope, sans-serif; }
@@ -126,6 +126,11 @@
 .activation-error { max-width: 620px; margin: 0 24px; color: #ffb4aa; text-align: center; }
 .media-layer { width: 100%; height: 100%; box-sizing: border-box; position: relative; display: grid; place-items: center; overflow: hidden; padding: clamp(10px, 2.2vmin, 32px); color: white; }
 .media-layer img, .media-layer video { display: block; width: 100%; height: 100%; max-width: 100%; max-height: 100%; object-fit: var(--media-fit, contain); object-position: center; background: #000; }
+.media-layer .media-blurred-background, .preview .preview-blurred-background, .image-motion-preview .preview-blurred-background { position: absolute; z-index: 0; inset: -5%; width: 110%; height: 110%; max-width: none; max-height: none; object-fit: cover; background: #000; filter: blur(clamp(14px, 2vw, 34px)) brightness(.34) saturate(.82); transform: scale(1.08); }
+.media-layer .media-main-image, .preview .preview-main-image, .image-motion-preview .preview-main-image { position: relative; z-index: 1; }
+.media-layer .media-main-image-centered, .preview .image-fit-blur_background, .image-motion-preview.image-fit-blur_background .preview-main-image { object-fit: contain; background: transparent; }
+.preview .image-fit-cover, .image-motion-preview.image-fit-cover .preview-main-image { object-fit: cover; }
+.preview .image-fit-fill, .image-motion-preview.image-fit-fill .preview-main-image { object-fit: fill; }
 .fully-kiosk body { overflow: hidden; background: #000; }
 .fully-kiosk .tv-screen, .fully-kiosk .media-layer { width: var(--tv-viewport-width); height: var(--tv-viewport-height); }
 .fully-kiosk .media-layer { padding: 0; }
