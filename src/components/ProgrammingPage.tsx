@@ -20,7 +20,13 @@ export function ProgrammingPage({ companyId, displays, items, onReload }: { comp
     await Promise.all(reordered.map((item, position) => client.from('tv_playlist_items').update({ position }).eq('id', item.id).eq('company_id', companyId)))
     await onReload()
   }
-  const removeItem = async (id: string) => { if (!supabase || !window.confirm('Remover este item da programação desta TV?')) return; await supabase.from('tv_playlist_items').delete().eq('id', id).eq('company_id', companyId); await onReload() }
+  const removeItem = async (id: string) => {
+    if (!supabase || !window.confirm('Remover este item da programação desta TV?')) return
+    const { data, error } = await supabase.from('tv_playlist_items').delete().eq('id', id).eq('company_id', companyId).select('id')
+    if (error) throw error
+    if (!data?.length) throw new Error('Item não encontrado ou remoção não autorizada.')
+    await onReload()
+  }
   return <>
     <div className="page-header"><div><h1>Programação</h1><p>Adicione textos e imagens e escolha exatamente em quais TVs serão exibidos.</p></div><button className="button primary" onClick={() => setComposerOpen(true)}><Plus size={16}/> Adicionar conteúdo</button></div>
     <div className="program-toolbar"><span className="badge">Playlist contínua</span><label>TV<select value={selectedDisplay} onChange={e => setSelectedDisplay(e.target.value)}><option value="">Todas as TVs</option>{displays.map(display => <option key={display.id} value={display.id}>{display.name}</option>)}</select></label>{selectedDisplay ? <a className="button secondary" href={`/tv/${companyId}/${selectedDisplay}`} target="_blank" rel="noreferrer"><ExternalLink size={15}/> Exibir na TV</a> : null}</div>

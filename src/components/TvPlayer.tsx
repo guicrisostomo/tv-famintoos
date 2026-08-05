@@ -76,6 +76,8 @@ export function TvPlayer({
   const processedCalls = useRef(readProcessedCalls(displayId));
   const videoRef = useRef<HTMLVideoElement>(null);
   const loadingRef = useRef(false);
+  const loadAgainRef = useRef(false);
+  const loadRef = useRef<() => Promise<void>>(async () => undefined);
   const reconnectRef = useRef<() => void>(() => undefined);
   const disconnectRef = useRef<() => void>(() => undefined);
   const progressRef = useRef({
@@ -145,7 +147,11 @@ export function TvPlayer({
   }, [diagnosticMode, runtime]);
 
   const load = useCallback(async () => {
-    if (!supabase || !companyId || !displayId || loadingRef.current) return;
+    if (!supabase || !companyId || !displayId) return;
+    if (loadingRef.current) {
+      loadAgainRef.current = true;
+      return;
+    }
     loadingRef.current = true;
     try {
       const [
@@ -294,8 +300,15 @@ export function TvPlayer({
       runtime.error(error);
     } finally {
       loadingRef.current = false;
+      if (loadAgainRef.current) {
+        loadAgainRef.current = false;
+        window.queueMicrotask(() => void loadRef.current());
+      }
     }
   }, [companyId, displayId, runtime]);
+  useEffect(() => {
+    loadRef.current = load;
+  }, [load]);
 
   useEffect(() => {
     const timer = runtime.timeout(() => void load(), 0);
@@ -343,10 +356,31 @@ export function TvPlayer({
         .on(
           "postgres_changes",
           {
-            event: "*",
+            event: "INSERT",
             schema: "public",
             table: "tv_playlist_items",
             filter: `display_id=eq.${displayId}`,
+          },
+          () => void load(),
+        )
+        .on(
+          "postgres_changes",
+          {
+            event: "UPDATE",
+            schema: "public",
+            table: "tv_playlist_items",
+            filter: `display_id=eq.${displayId}`,
+          },
+          () => void load(),
+        )
+        .on(
+          "postgres_changes",
+          {
+            // Supabase does not support filters on DELETE events. The reload
+            // itself remains scoped to this company and display.
+            event: "DELETE",
+            schema: "public",
+            table: "tv_playlist_items",
           },
           () => void load(),
         )
@@ -509,7 +543,7 @@ export function TvPlayer({
     const persistTimer = runtime.interval(persist, 5_000);
     const refreshTimer = runtime.interval(() => {
       if (!document.hidden) void load();
-    }, 5 * 60_000);
+    }, 30_000);
     return () => {
       persist();
       runtime.clear(persistTimer);
