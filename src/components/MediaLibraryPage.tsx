@@ -7,7 +7,7 @@ const formatSize = (bytes?: number | null) => bytes ? new Intl.NumberFormat('pt-
 
 export function MediaLibraryPage({ media, items, onReload }: { media: TvMediaRecord[]; items: TvPlaylistRecord[]; onReload: () => Promise<void> }) {
   const [deleting, setDeleting] = useState<string | null>(null); const [error, setError] = useState<string | null>(null)
-  const usage = useMemo(() => { const counts = new Map<string, number>(); items.forEach(item => counts.set(item.media_id, (counts.get(item.media_id) ?? 0) + 1)); return counts }, [items])
+  const usage = useMemo(() => { const counts = new Map<string, number>(); items.forEach(item => { counts.set(item.media_id, (counts.get(item.media_id) ?? 0) + 1); if (item.sound_media_id) counts.set(item.sound_media_id, (counts.get(item.sound_media_id) ?? 0) + 1) }); return counts }, [items])
   const remove = async (item: TvMediaRecord) => {
     const used = usage.get(item.id) ?? 0
     const warning = used ? `Esta mídia está em ${used} TV(s) e será removida dessas programações. Continuar?` : 'Excluir esta mídia permanentemente, inclusive do Cloudflare R2?'

@@ -169,7 +169,7 @@ export function TvPlayer({
         supabase
           .from("tv_playlist_items")
           .select(
-            "id,display_id,media_id,position,is_active,image_fit,caption_text,caption_animation,media:tv_media(id,title,media_type,media_url,message_text,duration_seconds,public_url,storage_provider,animation,starts_at,ends_at,weekdays,start_time,end_time)",
+            "id,display_id,media_id,position,is_active,image_fit,caption_text,caption_animation,sound_media_id,sound_volume,sound_loop,mute_original_audio,media:tv_media!tv_playlist_items_media_id_fkey(id,title,media_type,media_url,message_text,duration_seconds,public_url,storage_provider,animation,starts_at,ends_at,weekdays,start_time,end_time),sound_media:tv_media!tv_playlist_items_sound_media_id_fkey(id,title,media_type,media_url,message_text,duration_seconds,public_url,storage_provider,animation)",
           )
           .eq("company_id", companyId)
           .eq("display_id", displayId)
@@ -241,6 +241,7 @@ export function TvPlayer({
           fit: item.image_fit ?? "contain",
           overlayText: item.caption_text,
           overlayAnimation: item.caption_animation ?? "none",
+          soundtrack: item.sound_media && (item.sound_media.public_url || item.sound_media.media_url) ? { id: item.sound_media.id, title: item.sound_media.title, url: item.sound_media.public_url ?? item.sound_media.media_url!, volume: item.sound_volume ?? .7, loop: item.sound_loop ?? true, muteOriginalAudio: item.mute_original_audio ?? false } : null,
           resumeBehavior: "resume" as const,
           active: item.is_active,
           media: {
@@ -577,6 +578,15 @@ export function TvPlayer({
       recoveries: 0,
     };
   }, [current?.id, current?.media.title, index, runtime]);
+
+  useEffect(() => {
+    if (!activated || activeInterruption || !soundEnabled || !current?.soundtrack) {
+      tvAudioService.stopSoundtrack();
+      return;
+    }
+    void tvAudioService.playSoundtrack(current.soundtrack.url, current.soundtrack.volume, current.soundtrack.loop).catch(error => runtime.error(error));
+    return () => tvAudioService.stopSoundtrack();
+  }, [activated, activeInterruption, current?.id, current?.soundtrack, runtime, soundEnabled]);
 
   useEffect(() => {
     if (!next) {
@@ -1048,7 +1058,7 @@ function Media({
       onError(mediaPlaybackError(video, item));
       return;
     }
-    if (soundEnabled && !item.muted) {
+    if (soundEnabled && !item.muted && !item.soundtrack?.muteOriginalAudio) {
       video.muted = false;
       try {
         await tvAudioService.playMediaAudio(video, item.volume);

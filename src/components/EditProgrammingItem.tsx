@@ -8,6 +8,7 @@ import type {
   TvPlaylistRecord,
 } from "../hooks/useTvData";
 import { supabase } from "../services/supabase";
+import { SoundPicker, type SoundSettings } from "./SoundPicker";
 
 export function EditProgrammingItem({
   companyId,
@@ -44,6 +45,7 @@ export function EditProgrammingItem({
   );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [sound, setSound] = useState<SoundSettings>({ mediaId: item.sound_media_id ?? null, media: item.sound_media ?? null, volume: item.sound_volume ?? .7, loop: item.sound_loop ?? true, muteOriginalAudio: item.mute_original_audio ?? false });
   const url = item.media.public_url ?? item.media.media_url;
 
   const toggleDisplay = (id: string) =>
@@ -101,6 +103,10 @@ export function EditProgrammingItem({
               item.media.media_type === "message" || !captionText.trim()
                 ? "none"
                 : captionAnimation,
+            sound_media_id: sound.mediaId,
+            sound_volume: sound.volume,
+            sound_loop: sound.loop,
+            mute_original_audio: item.media.media_type === "video" && sound.mediaId ? sound.muteOriginalAudio : false,
           })
           .eq("company_id", companyId)
           .in(
@@ -155,6 +161,10 @@ export function EditProgrammingItem({
                 item.media.media_type === "message" || !captionText.trim()
                   ? "none"
                   : captionAnimation,
+              sound_media_id: sound.mediaId,
+              sound_volume: sound.volume,
+              sound_loop: sound.loop,
+              mute_original_audio: item.media.media_type === "video" && sound.mediaId ? sound.muteOriginalAudio : false,
               position: (maxPositions.get(displayId) ?? -1) + 1,
               is_active: true,
             })),
@@ -324,6 +334,7 @@ export function EditProgrammingItem({
                 </label>
               </div>
             ) : null}
+            <SoundPicker companyId={companyId} value={sound} isVideo={item.media.media_type === "video"} onChange={setSound} />
             <fieldset>
               <legend>Exibir nas TVs</legend>
               <div className="check-grid">

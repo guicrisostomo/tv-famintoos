@@ -8,6 +8,7 @@ import { getR2Config } from '../../_lib/r2.js'
 const allowedTypes = new Map([
   ['image/jpeg', 'images'], ['image/png', 'images'], ['image/webp', 'images'],
   ['video/mp4', 'videos'], ['audio/mpeg', 'audio'], ['audio/wav', 'audio'],
+  ['audio/mp4', 'audio'], ['audio/x-m4a', 'audio'], ['audio/aac', 'audio'], ['audio/ogg', 'audio'],
 ])
 const maxFileSize = 500 * 1024 * 1024
 

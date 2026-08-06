@@ -8,6 +8,7 @@ interface R2AssetRecord { id: number; business_cnpj: string; r2_key: string }
 export async function isMediaUsed(supabase: SupabaseClient, mediaId: string) {
   const queries = [
     supabase.from('tv_playlist_items').select('id', { count: 'exact', head: true }).eq('media_id', mediaId),
+    supabase.from('tv_playlist_items').select('id', { count: 'exact', head: true }).eq('sound_media_id', mediaId),
     supabase.from('tv_program_items').select('id', { count: 'exact', head: true }).eq('media_id', mediaId),
     supabase.from('tv_campaigns').select('id', { count: 'exact', head: true }).eq('media_id', mediaId),
     supabase.from('tv_display_themes').select('id', { count: 'exact', head: true }).or(`logo_media_id.eq.${mediaId},background_media_id.eq.${mediaId},opening_media_id.eq.${mediaId},commercial_intro_media_id.eq.${mediaId},commercial_outro_media_id.eq.${mediaId}`),

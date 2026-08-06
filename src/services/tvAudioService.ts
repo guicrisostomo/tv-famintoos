@@ -34,6 +34,7 @@ class TvAudioService {
   private gain: GainNode | null = null
   private bellSource: MediaElementAudioSourceNode | null = null
   private bell: HTMLAudioElement | null = null
+  private soundtrack: HTMLAudioElement | null = null
   private bellUrl: string | null = null
   private media = new Set<HTMLMediaElement>()
   private listeners = new Set<Listener>()
@@ -87,6 +88,19 @@ class TvAudioService {
     catch (error) { this.captureError(error, 'Falha ao iniciar o áudio da mídia.'); throw error }
   }
 
+  async playSoundtrack(url: string, volume = .7, loop = true) {
+    if (!this.enabled) return
+    this.initializeAudio(); await this.resumeAudioContext()
+    const audio = this.soundtrack ?? new Audio()
+    this.soundtrack = audio; this.media.add(audio)
+    if (audio.src !== url) { audio.pause(); audio.src = url; audio.load() }
+    audio.loop = loop; audio.volume = Math.max(0, Math.min(1, volume * this.volume)); this.loadedMedia = url
+    try { await audio.play(); this.lastError = null; this.emit() }
+    catch (error) { this.captureError(error, 'Falha ao reproduzir o som da mídia.'); throw error }
+  }
+
+  stopSoundtrack() { if (!this.soundtrack) return; this.soundtrack.pause(); this.soundtrack.currentTime = 0; this.emit() }
+
   releaseMedia(element: HTMLMediaElement) {
     const source = element.currentSrc || element.src
     element.pause(); this.media.delete(element); element.removeAttribute('src'); element.load()
@@ -105,7 +119,7 @@ class TvAudioService {
   dispose() {
     this.pauseAllAudio(); document.removeEventListener('visibilitychange', this.handleVisibility); document.removeEventListener('webkitvisibilitychange', this.handleVisibility)
     window.removeEventListener('focus', this.handleResume); window.removeEventListener('pageshow', this.handleResume); window.removeEventListener('blur', this.handlePause)
-    this.media.clear(); this.bellSource?.disconnect(); this.bell?.removeAttribute('src'); if (this.bellUrl) URL.revokeObjectURL(this.bellUrl); void this.context?.close()
+    this.soundtrack?.removeAttribute('src'); this.soundtrack?.load(); this.soundtrack = null; this.media.clear(); this.bellSource?.disconnect(); this.bell?.removeAttribute('src'); if (this.bellUrl) URL.revokeObjectURL(this.bellUrl); void this.context?.close()
     this.context = null; this.gain = null; this.bellSource = null; this.bell = null; this.bellUrl = null; this.initialized = false; this.unlocked = false; this.emit()
   }
 

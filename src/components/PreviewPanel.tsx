@@ -94,6 +94,9 @@ export function PreviewPanel({ items }: { items: TvPlaylistRecord[] }) {
           </button>
         ) : null}
       </div>
+      {currentItem?.sound_media && (currentItem.sound_media.public_url || currentItem.sound_media.media_url) ? (
+        <audio key={`${currentItem.id}-${index}`} src={currentItem.sound_media.public_url ?? currentItem.sound_media.media_url ?? undefined} autoPlay={playing} loop={currentItem.sound_loop ?? true} controls style={{ width: "100%" }} />
+      ) : null}
     </section>
   );
 }

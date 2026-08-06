@@ -29,6 +29,7 @@ export interface ProgramItem {
   active: boolean
   overlayText?: string | null
   overlayAnimation?: 'none' | 'fade' | 'slide_up' | 'pulse'
+  soundtrack?: { id: string; title?: string | null; url: string; volume: number; loop: boolean; muteOriginalAudio: boolean } | null
   qrCodeUrl?: string | null
 }
 

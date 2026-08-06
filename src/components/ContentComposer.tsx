@@ -25,6 +25,7 @@ import {
   type R2ExistingObject,
 } from "../services/storage";
 import { supabase } from "../services/supabase";
+import { SoundPicker, type SoundSettings } from "./SoundPicker";
 
 type ContentType = "message" | "image" | "video";
 interface FileInfo {
@@ -118,6 +119,7 @@ export function ContentComposer({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  const [sound, setSound] = useState<SoundSettings>({ mediaId: null, media: null, volume: .7, loop: true, muteOriginalAudio: false });
   const selectedNames = useMemo(
     () =>
       displays
@@ -175,6 +177,7 @@ export function ContentComposer({
     setImageFit("contain");
     setCaptionText("");
     setCaptionAnimation("none");
+    setSound({ mediaId: null, media: null, volume: .7, loop: true, muteOriginalAudio: false });
     setError(null);
   };
   const selectFile = async (nextFile: File | null) => {
@@ -387,6 +390,10 @@ export function ContentComposer({
           type === "message" || !captionText.trim()
             ? "none"
             : captionAnimation,
+        sound_media_id: sound.mediaId,
+        sound_volume: sound.volume,
+        sound_loop: sound.loop,
+        mute_original_audio: type === "video" && sound.mediaId ? sound.muteOriginalAudio : false,
       }));
       const { error: playlistError } = await supabase
         .from("tv_playlist_items")
@@ -483,6 +490,7 @@ export function ContentComposer({
               </button>
             </div>
             <div className="editor-form">
+              <SoundPicker companyId={companyId} value={sound} isVideo={type === "video"} onChange={setSound} />
               <label>
                 Título
                 <input

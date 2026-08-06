@@ -12,7 +12,7 @@ export interface R2ExistingObject {
   publicUrl: string;
   size: number;
   lastModified: string | null;
-  type: "image" | "video";
+  type: "image" | "video" | "audio";
 }
 
 const allowedTypes = new Set([
@@ -22,6 +22,10 @@ const allowedTypes = new Set([
   "video/mp4",
   "audio/mpeg",
   "audio/wav",
+  "audio/mp4",
+  "audio/x-m4a",
+  "audio/aac",
+  "audio/ogg",
 ]);
 
 export async function requestR2Upload(
