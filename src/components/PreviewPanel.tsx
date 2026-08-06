@@ -57,6 +57,11 @@ export function PreviewPanel({ items }: { items: TvPlaylistRecord[] }) {
         ) : (
           <div className="preview-placeholder">{current.title}</div>
         )}
+        {current && current.media_type !== "message" && currentItem.caption_text ? (
+          <div className={`media-caption preview-caption caption-${currentItem.caption_animation ?? "none"}`}>
+            {currentItem.caption_text}
+          </div>
+        ) : null}
       </div>
       <div className="preview-actions">
         <button

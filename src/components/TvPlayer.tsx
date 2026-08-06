@@ -169,7 +169,7 @@ export function TvPlayer({
         supabase
           .from("tv_playlist_items")
           .select(
-            "id,display_id,media_id,position,is_active,image_fit,media:tv_media(id,title,media_type,media_url,message_text,duration_seconds,public_url,storage_provider,animation,starts_at,ends_at,weekdays,start_time,end_time)",
+            "id,display_id,media_id,position,is_active,image_fit,caption_text,caption_animation,media:tv_media(id,title,media_type,media_url,message_text,duration_seconds,public_url,storage_provider,animation,starts_at,ends_at,weekdays,start_time,end_time)",
           )
           .eq("company_id", companyId)
           .eq("display_id", displayId)
@@ -239,6 +239,8 @@ export function TvPlayer({
           volume: 1,
           muted: !nextSoundEnabled,
           fit: item.image_fit ?? "contain",
+          overlayText: item.caption_text,
+          overlayAnimation: item.caption_animation ?? "none",
           resumeBehavior: "resume" as const,
           active: item.is_active,
           media: {
@@ -1107,7 +1109,7 @@ function Media({
         <div className="message-content">{item.media.title}</div>
       ) : null}
       {item.overlayText ? (
-        <div className="message-content">{item.overlayText}</div>
+        <div className={`media-caption caption-${item.overlayAnimation ?? "none"}`}>{item.overlayText}</div>
       ) : null}
       {item.qrCodeUrl ? (
         <div className="qr-overlay">

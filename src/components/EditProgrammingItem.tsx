@@ -2,6 +2,7 @@ import { useState, type FormEvent } from "react";
 import { Check, LoaderCircle, X } from "lucide-react";
 import type {
   ImageAnimation,
+  TvCaptionAnimation,
   TvDisplayRecord,
   TvImageFit,
   TvPlaylistRecord,
@@ -35,6 +36,9 @@ export function EditProgrammingItem({
   const [imageFit, setImageFit] = useState<TvImageFit>(
     item.image_fit ?? "contain",
   );
+  const [captionText, setCaptionText] = useState(item.caption_text ?? "");
+  const [captionAnimation, setCaptionAnimation] =
+    useState<TvCaptionAnimation>(item.caption_animation ?? "none");
   const [displayIds, setDisplayIds] = useState(() =>
     Array.from(new Set(mediaItems.map((candidate) => candidate.display_id))),
   );
@@ -89,6 +93,14 @@ export function EditProgrammingItem({
           .update({
             image_fit:
               item.media.media_type === "image" ? imageFit : "contain",
+            caption_text:
+              item.media.media_type === "message"
+                ? null
+                : captionText.trim() || null,
+            caption_animation:
+              item.media.media_type === "message" || !captionText.trim()
+                ? "none"
+                : captionAnimation,
           })
           .eq("company_id", companyId)
           .in(
@@ -135,6 +147,14 @@ export function EditProgrammingItem({
               media_id: item.media_id,
               image_fit:
                 item.media.media_type === "image" ? imageFit : "contain",
+              caption_text:
+                item.media.media_type === "message"
+                  ? null
+                  : captionText.trim() || null,
+              caption_animation:
+                item.media.media_type === "message" || !captionText.trim()
+                  ? "none"
+                  : captionAnimation,
               position: (maxPositions.get(displayId) ?? -1) + 1,
               is_active: true,
             })),
@@ -199,6 +219,11 @@ export function EditProgrammingItem({
                   src={url}
                   alt="Prévia do conteúdo"
                 />
+                {captionText.trim() ? (
+                  <div className={`media-caption preview-caption caption-${captionAnimation}`}>
+                    {captionText.trim()}
+                  </div>
+                ) : null}
                 <span>Prévia da animação</span>
               </div>
             ) : null}
@@ -270,6 +295,34 @@ export function EditProgrammingItem({
                   <option value="pan_right">Movimento para a direita</option>
                 </select>
               </label>
+            ) : null}
+            {item.media.media_type !== "message" ? (
+              <div className="caption-editor">
+                <label>
+                  Legenda opcional
+                  <input
+                    value={captionText}
+                    onChange={(event) => setCaptionText(event.target.value)}
+                    maxLength={160}
+                    placeholder="Ex.: Promoção válida até domingo"
+                  />
+                </label>
+                <label>
+                  Animação da legenda
+                  <select
+                    value={captionAnimation}
+                    disabled={!captionText.trim()}
+                    onChange={(event) =>
+                      setCaptionAnimation(event.target.value as TvCaptionAnimation)
+                    }
+                  >
+                    <option value="none">Sem animação</option>
+                    <option value="fade">Aparecer suavemente</option>
+                    <option value="slide_up">Subir suavemente</option>
+                    <option value="pulse">Destaque pulsante</option>
+                  </select>
+                </label>
+              </div>
             ) : null}
             <fieldset>
               <legend>Exibir nas TVs</legend>

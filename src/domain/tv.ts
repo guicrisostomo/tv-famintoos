@@ -28,6 +28,7 @@ export interface ProgramItem {
   resumeBehavior: 'resume' | 'restart'
   active: boolean
   overlayText?: string | null
+  overlayAnimation?: 'none' | 'fade' | 'slide_up' | 'pulse'
   qrCodeUrl?: string | null
 }
 
