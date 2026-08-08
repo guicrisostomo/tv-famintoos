@@ -897,14 +897,22 @@ function AudioUnlock({
 
 function isScheduledNow(media: TvPlaylistRecord["media"]) {
   const now = new Date();
-  if (media.starts_at && now < new Date(media.starts_at)) return false;
-  if (media.ends_at && now > new Date(media.ends_at)) return false;
+  const today = localDateKey(now);
+  if (media.starts_at && today < media.starts_at.slice(0, 10)) return false;
+  if (media.ends_at && today > media.ends_at.slice(0, 10)) return false;
   if (media.weekdays?.length && !media.weekdays.includes(now.getDay()))
     return false;
   const time = now.toTimeString().slice(0, 8);
   if (media.start_time && time < media.start_time) return false;
   if (media.end_time && time > media.end_time) return false;
   return true;
+}
+
+function localDateKey(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 async function updateCall(

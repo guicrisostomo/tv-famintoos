@@ -131,6 +131,7 @@ export function ContentComposer({
         .map((display) => display.name),
     [displays, selectedDisplays],
   );
+  const allDisplaysSelected = displays.length > 0 && displays.every(display => selectedDisplays.includes(display.id));
   const previewUrl =
     mediaSource === "upload"
       ? localPreviewUrl
@@ -830,7 +831,7 @@ export function ContentComposer({
                     Cadastre primeiro uma TV na seção Canal.
                   </p>
                 ) : (
-                  <div className="check-grid">
+                  <div className="display-selection"><label className="select-all-displays"><input type="checkbox" checked={allDisplaysSelected} onChange={() => setSelectedDisplays(allDisplaysSelected ? [] : displays.map(display => display.id))}/><span><strong>Todas as TVs</strong><small>Selecionar ou desmarcar todas de uma vez</small></span></label><div className="check-grid">
                     {displays.map((display) => (
                       <label key={display.id}>
                         <input
@@ -841,7 +842,7 @@ export function ContentComposer({
                         <span>{display.name}</span>
                       </label>
                     ))}
-                  </div>
+                  </div></div>
                 )}
               </fieldset>
             </div>

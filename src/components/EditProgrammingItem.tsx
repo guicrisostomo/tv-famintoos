@@ -55,6 +55,7 @@ export function EditProgrammingItem({
     startTime: item.media.start_time?.slice(0, 5) ?? "", endTime: item.media.end_time?.slice(0, 5) ?? "", weekdays: item.media.weekdays ?? [],
   }));
   const url = item.media.public_url ?? item.media.media_url;
+  const allDisplaysSelected = displays.length > 0 && displays.every(display => displayIds.includes(display.id));
 
   const toggleDisplay = (id: string) =>
     setDisplayIds((current) =>
@@ -352,7 +353,7 @@ export function EditProgrammingItem({
           <div className="form-tab-panel editor-form" hidden={activeTab !== "tvs"}>
             <fieldset>
               <legend>Exibir nas TVs</legend>
-              <div className="check-grid">
+              <div className="display-selection"><label className="select-all-displays"><input type="checkbox" checked={allDisplaysSelected} onChange={() => setDisplayIds(allDisplaysSelected ? [] : displays.map(display => display.id))}/><span><strong>Todas as TVs</strong><small>Selecionar ou desmarcar todas de uma vez</small></span></label><div className="check-grid">
                 {displays.map((display) => (
                   <label key={display.id}>
                     <input
@@ -363,7 +364,7 @@ export function EditProgrammingItem({
                     <span>{display.name}</span>
                   </label>
                 ))}
-              </div>
+              </div></div>
             </fieldset>
           </div>
             {error ? (

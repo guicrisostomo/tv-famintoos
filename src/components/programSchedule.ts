@@ -2,12 +2,18 @@ import type { TvPlaylistRecord } from '../hooks/useTvData'
 
 export function isItemScheduledOnDate(item: TvPlaylistRecord, date: Date) {
   const media = item.media
-  const dayStart = new Date(date.getFullYear(), date.getMonth(), date.getDate())
-  const dayEnd = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59, 999)
-  if (media.starts_at && new Date(media.starts_at) > dayEnd) return false
-  if (media.ends_at && new Date(media.ends_at) < dayStart) return false
+  const dateKey = localDateKey(date)
+  if (media.starts_at && dateKey < media.starts_at.slice(0, 10)) return false
+  if (media.ends_at && dateKey > media.ends_at.slice(0, 10)) return false
   if (media.weekdays?.length && !media.weekdays.includes(date.getDay())) return false
   return true
+}
+
+function localDateKey(date: Date) {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
 }
 
 export function hasItemSchedule(item: TvPlaylistRecord) {
