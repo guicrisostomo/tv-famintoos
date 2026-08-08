@@ -76,6 +76,7 @@ export function TvPlayer({
   const [index, setIndex] = useState(
     () => readPlayback(companyId, displayId)?.itemIndex ?? 0,
   );
+  const [playbackCycle, setPlaybackCycle] = useState(0);
   const [interruptions, setInterruptions] = useState<Interruption[]>([]);
   const [activeInterruption, setActiveInterruption] =
     useState<Interruption | null>(null);
@@ -470,6 +471,20 @@ export function TvPlayer({
   );
   const current = items[index % Math.max(items.length, 1)];
   const next = items.length > 1 ? items[(index + 1) % items.length] : null;
+  const nextIndex = items.length ? (index + 1) % items.length : 0;
+  const nextItemId = items[nextIndex]?.id ?? "";
+  const advanceToNext = useCallback(() => {
+    savePlayback(companyId, displayId, {
+      itemId: nextItemId,
+      itemIndex: nextIndex,
+      elapsedSeconds: 0,
+      savedAt: new Date().toISOString(),
+    });
+    setIndex(nextIndex);
+    // Também força uma nova instância do player quando a playlist tem apenas
+    // um vídeo e o índice continua sendo zero depois do evento ended.
+    setPlaybackCycle((value) => value + 1);
+  }, [companyId, displayId, nextIndex, nextItemId]);
 
   useDeploymentRefresh(() => {
     if (activeInterruption) return;
@@ -608,7 +623,7 @@ export function TvPlayer({
     });
     runtime.lifecycle(`otimizando vídeo incompatível: ${current.media.title ?? current.media.id}`);
     const timer = runtime.timeout(() => {
-      if (items.length > 1) setIndex(value => (value + 1) % items.length);
+      if (items.length > 1) advanceToNext();
       void normalizeTvVideo(current.media.id)
         .then(() => {
           setVideoRecovery(null);
@@ -626,7 +641,7 @@ export function TvPlayer({
         });
     }, 800);
     return () => runtime.clear(timer);
-  }, [activated, current?.media.id, current?.media.storageKey, current?.media.title, current?.media.type, items.length, runtime]);
+  }, [activated, advanceToNext, current?.media.id, current?.media.storageKey, current?.media.title, current?.media.type, items.length, runtime]);
 
   useEffect(() => {
     if (!activated || activeInterruption || !soundEnabled || !current?.soundtrack) {
@@ -706,7 +721,7 @@ export function TvPlayer({
         if (video) {
           video.load();
           void video.play().catch(() => undefined);
-        } else setIndex((value) => (value + 1) % Math.max(items.length, 1));
+        } else advanceToNext();
         return;
       }
       savePlayback(companyId, displayId, {
@@ -722,6 +737,7 @@ export function TvPlayer({
     return () => runtime.clear(watchdog);
   }, [
     activeInterruption,
+    advanceToNext,
     companyId,
     current,
     displayId,
@@ -846,11 +862,11 @@ export function TvPlayer({
     )
       return;
     const timer = runtime.timeout(
-      () => setIndex((i) => (i + 1) % items.length),
+      advanceToNext,
       current.durationSeconds * 1000,
     );
     return () => runtime.clear(timer);
-  }, [activated, activeInterruption, current, items.length, runtime]);
+  }, [activated, activeInterruption, advanceToNext, current, runtime]);
 
   const activate = async () => {
     setActivating(true);
@@ -908,7 +924,7 @@ export function TvPlayer({
   return (
     <main className="tv-screen">
       <Media
-        key={current.id}
+        key={`${current.id}:${playbackCycle}`}
         item={current}
         displayId={displayId}
         videoRef={videoRef}
@@ -919,7 +935,10 @@ export function TvPlayer({
           if (diagnosticMode)
             runtime.lifecycle(`video:${event} ready=${video.readyState} network=${video.networkState} time=${video.currentTime.toFixed(1)} muted=${video.muted}`);
         }}
-        onEnded={() => setIndex((i) => (i + 1) % items.length)}
+        onEnded={() => {
+          runtime.lifecycle(`vídeo finalizado: ${current.media.title ?? current.id}`);
+          advanceToNext();
+        }}
         onError={(error) => {
           runtime.error(error);
           void load();
@@ -1105,6 +1124,7 @@ function Media({
   const saved = readPlayback(item.companyId, displayId);
   const attachedVideo = useRef<HTMLVideoElement | null>(null);
   const playbackStarted = useRef(false);
+  const playbackPositionRestored = useRef(false);
   const attachVideo = useCallback(
     (video: HTMLVideoElement | null) => {
       const previous = attachedVideo.current;
@@ -1124,20 +1144,22 @@ function Media({
   );
   const restoreAndPlay = useCallback(async () => {
     const video = videoRef.current;
-    if (!video || !playbackEnabled || playbackStarted.current) return;
-    if (saved?.itemId === item.id && Number.isFinite(saved.elapsedSeconds)) {
+    if (!video || !playbackEnabled) return;
+    if (!playbackPositionRestored.current && video.readyState >= 1 && Number.isFinite(video.duration)) {
+      playbackPositionRestored.current = true;
       try {
-        const lastPlayableSecond = Number.isFinite(video.duration)
-          ? Math.max(0, video.duration - 0.25)
-          : saved.elapsedSeconds;
-        video.currentTime = Math.max(
-          0,
-          Math.min(saved.elapsedSeconds, lastPlayableSecond),
-        );
+        const savedSecond = saved?.itemId === item.id && Number.isFinite(saved.elapsedSeconds)
+          ? Math.max(0, saved.elapsedSeconds)
+          : 0;
+        // Um snapshot no último segundo representa uma execução concluída e
+        // deve reiniciar, nunca reaparecer como um quadro preto no fim.
+        const targetSecond = video.duration - savedSecond > 1 ? savedSecond : 0;
+        video.currentTime = Math.min(targetSecond, Math.max(0, video.duration - 0.25));
       } catch {
         /* Some older browsers only accept currentTime after canplay. */
       }
     }
+    if (playbackStarted.current && !video.paused) return;
     video.volume = item.volume;
     // Always start the visual track muted. Amazon Silk can reject the whole
     // play() request when sound is enabled, even after a previous unlock.
