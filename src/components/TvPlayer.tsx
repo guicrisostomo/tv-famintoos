@@ -54,6 +54,11 @@ export function TvPlayer({
   const [activated, setActivated] = useState(false);
   const [activating, setActivating] = useState(false);
   const [activationError, setActivationError] = useState<string | null>(null);
+  const [videoRecovery, setVideoRecovery] = useState<{
+    mediaId: string;
+    message: string;
+    failed?: boolean;
+  } | null>(null);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [callSettings, setCallSettings] = useState<CallSpeechSettings>(
     defaultCallSpeechSettings,
@@ -576,12 +581,28 @@ export function TvPlayer({
     const storageKey = current?.media.storageKey;
     if (!activated || current?.media.type !== "video" || !storageKey || storageKey.includes("/compatible/") || normalizingVideos.current.has(current.media.id)) return;
     normalizingVideos.current.add(current.media.id);
+    setVideoRecovery({
+      mediaId: current.media.id,
+      message: "Preparando o vídeo para esta TV...",
+    });
     runtime.lifecycle(`otimizando vídeo incompatível: ${current.media.title ?? current.media.id}`);
     const timer = runtime.timeout(() => {
       if (items.length > 1) setIndex(value => (value + 1) % items.length);
       void normalizeTvVideo(current.media.id)
-        .then(() => { runtime.lifecycle(`vídeo otimizado: ${current.media.title ?? current.media.id}`); return loadRef.current(); })
-        .catch(error => { normalizingVideos.current.delete(current.media.id); runtime.error(error); });
+        .then(() => {
+          setVideoRecovery(null);
+          runtime.lifecycle(`vídeo otimizado: ${current.media.title ?? current.media.id}`);
+          return loadRef.current();
+        })
+        .catch(error => {
+          normalizingVideos.current.delete(current.media.id);
+          setVideoRecovery({
+            mediaId: current.media.id,
+            message: "Não foi possível preparar este vídeo. Verifique a conexão e tente novamente.",
+            failed: true,
+          });
+          runtime.error(error);
+        });
     }, 800);
     return () => runtime.clear(timer);
   }, [activated, current?.media.id, current?.media.storageKey, current?.media.title, current?.media.type, items.length, runtime]);
@@ -817,33 +838,33 @@ export function TvPlayer({
       tvAudioService.initializeAudio();
       tvAudioService.setEnabled(soundEnabled);
       await tvAudioService.unlockAudio();
-      const video = videoRef.current;
-      if (video) {
-        video.muted = true;
-        try {
-          await playVideo(video);
-        } catch (error) {
-          runtime.error(error);
-        }
-      }
-      window.localStorage.setItem(
-        activationKey(displayId),
-        new Date().toISOString(),
-      );
-      setActivated(true);
-      try {
-        await document.documentElement.requestFullscreen?.();
-      } catch {
-        /* fullscreen is optional */
-      }
     } catch (error) {
-      setActivationError(
-        error instanceof Error
-          ? error.message
-          : "Não foi possível ativar o áudio. Tente novamente.",
-      );
-    } finally {
-      setActivating(false);
+      // Falhar ao liberar o som não pode impedir a imagem no Fully Kiosk.
+      const message = error instanceof Error
+        ? error.message
+        : "Não foi possível ativar o áudio.";
+      setActivationError(message);
+      runtime.error(message);
+    }
+    const video = videoRef.current;
+    if (video) {
+      video.muted = true;
+      try {
+        await playVideo(video);
+      } catch (error) {
+        runtime.error(error);
+      }
+    }
+    window.localStorage.setItem(
+      activationKey(displayId),
+      new Date().toISOString(),
+    );
+    setActivated(true);
+    setActivating(false);
+    try {
+      await document.documentElement.requestFullscreen?.();
+    } catch {
+      /* fullscreen is optional */
     }
   };
   if (!current)
@@ -883,6 +904,12 @@ export function TvPlayer({
           void load();
         }}
       />
+      {videoRecovery?.mediaId === current.media.id ? (
+        <div className={`video-recovery${videoRecovery.failed ? " failed" : ""}`} role="status">
+          <strong>{videoRecovery.failed ? "Vídeo indisponível" : "Otimizando vídeo"}</strong>
+          <span>{videoRecovery.message}</span>
+        </div>
+      ) : null}
       {activeInterruption ? (
         <CallOverlay interruption={activeInterruption} />
       ) : null}
