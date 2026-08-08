@@ -800,6 +800,15 @@ export function TvPlayer({
       tvAudioService.initializeAudio();
       tvAudioService.setEnabled(soundEnabled);
       await tvAudioService.unlockAudio();
+      const video = videoRef.current;
+      if (video) {
+        video.muted = true;
+        try {
+          await playVideo(video);
+        } catch (error) {
+          runtime.error(error);
+        }
+      }
       window.localStorage.setItem(
         activationKey(displayId),
         new Date().toISOString(),
@@ -823,6 +832,7 @@ export function TvPlayer({
   if (!current)
     return (
       <main className="tv-screen" aria-label="TV sem programação">
+        {!activated ? <AudioUnlock onClick={activate} activating={activating} error={activationError} /> : null}
         {activeInterruption ? (
           <CallOverlay interruption={activeInterruption} />
         ) : null}
@@ -845,6 +855,7 @@ export function TvPlayer({
         videoRef={videoRef}
         soundEnabled={soundEnabled}
         audioActivated={activated}
+        playbackEnabled={activated}
         onVideoEvent={(event, video) => {
           if (diagnosticMode)
             runtime.lifecycle(`video:${event} ready=${video.readyState} network=${video.networkState} time=${video.currentTime.toFixed(1)} muted=${video.muted}`);
@@ -858,8 +869,8 @@ export function TvPlayer({
       {activeInterruption ? (
         <CallOverlay interruption={activeInterruption} />
       ) : null}
-      {!activated || activationError ? (
-        <AudioUnlock onClick={activate} activating={activating} />
+      {!activated ? (
+        <AudioUnlock onClick={activate} activating={activating} error={activationError} />
       ) : null}
       {diagnosticMode ? (
         <AudioDiagnostic
@@ -875,18 +886,24 @@ export function TvPlayer({
 function AudioUnlock({
   onClick,
   activating,
+  error,
 }: {
   onClick: () => Promise<void>;
   activating: boolean;
+  error: string | null;
 }) {
   return (
-    <button
-      className="audio-unlock"
-      onClick={() => void onClick()}
-      disabled={activating}
-    >
-      {activating ? "Iniciando exibição..." : "Iniciar exibição"}
-    </button>
+    <div className="audio-unlock-gate">
+      <div>
+        <span>Famintoos TV</span>
+        <h1>Pronto para iniciar</h1>
+        <p>Pressione o botão abaixo com o controle remoto para liberar imagem e som.</p>
+        <button className="audio-unlock" onClick={() => void onClick()} disabled={activating} autoFocus>
+          {activating ? "Iniciando exibição..." : "Iniciar exibição"}
+        </button>
+        {error ? <p className="activation-error" role="alert">{error}</p> : null}
+      </div>
+    </div>
   );
 }
 
@@ -1004,6 +1021,7 @@ function Media({
   videoRef,
   soundEnabled,
   audioActivated,
+  playbackEnabled,
   onVideoEvent,
   onEnded,
   onError,
@@ -1013,6 +1031,7 @@ function Media({
   videoRef: React.RefObject<HTMLVideoElement | null>;
   soundEnabled: boolean;
   audioActivated: boolean;
+  playbackEnabled: boolean;
   onVideoEvent: (event: string, video: HTMLVideoElement) => void;
   onEnded: () => void;
   onError: (error: Error) => void;
@@ -1040,7 +1059,7 @@ function Media({
   );
   const restoreAndPlay = useCallback(async () => {
     const video = videoRef.current;
-    if (!video || playbackStarted.current) return;
+    if (!video || !playbackEnabled || playbackStarted.current) return;
     if (saved?.itemId === item.id && Number.isFinite(saved.elapsedSeconds)) {
       try {
         const lastPlayableSecond = Number.isFinite(video.duration)
@@ -1075,7 +1094,11 @@ function Media({
         if (video.paused) void playVideo(video).catch(() => undefined);
       }
     }
-  }, [audioActivated, item, onError, saved, soundEnabled, videoRef]);
+  }, [audioActivated, item, onError, playbackEnabled, saved, soundEnabled, videoRef]);
+
+  useEffect(() => {
+    if (playbackEnabled) void restoreAndPlay();
+  }, [playbackEnabled, restoreAndPlay]);
 
   useEffect(() => {
     const video = videoRef.current;
