@@ -501,13 +501,27 @@ export function TvPlayer({
       void load();
       void tvAudioService.resumeAudioContext();
       const video = videoRef.current;
-      if (video && current?.media.type === "video" && video.paused)
-        void video.play().catch(() => {
-          // Fully/Android WebView may revoke audible autoplay after the app
-          // returns from the background. Resume the picture without sound.
-          video.muted = true;
-          void video.play().catch((error) => runtime.error(error));
-        });
+      if (activated && video && current?.media.type === "video") {
+        void (async () => {
+          if (video.paused) {
+            // Fully/Android WebView may revoke audible autoplay after the app
+            // returns from the background. Resume the picture muted first.
+            video.muted = true;
+            try {
+              await playVideo(video);
+            } catch (error) {
+              runtime.error(error);
+              return;
+            }
+          }
+          if (soundEnabled && !current.muted && !current.soundtrack?.muteOriginalAudio) {
+            void tvAudioService.playMediaAudio(video, current.volume).catch(() => {
+              // Keep the visual track running even if audible playback is denied.
+              video.muted = true;
+            });
+          }
+        })();
+      }
     };
     const hide = () => {
       runtime.lifecycle("background");
@@ -527,7 +541,9 @@ export function TvPlayer({
     };
     const blur = () => {
       runtime.lifecycle("blur");
-      hide();
+      // Fully Kiosk may emit blur while requesting fullscreen. Persist state,
+      // but keep the visual track running; the audio service mutes it.
+      persist();
     };
     const offline = () => {
       runtime.lifecycle("offline");
@@ -558,13 +574,18 @@ export function TvPlayer({
       document.removeEventListener("visibilitychange", visibility);
     };
   }, [
+    activated,
     companyId,
     current?.id,
     current?.media.type,
+    current?.muted,
+    current?.soundtrack?.muteOriginalAudio,
+    current?.volume,
     displayId,
     index,
     load,
     runtime,
+    soundEnabled,
   ]);
 
   useEffect(() => {

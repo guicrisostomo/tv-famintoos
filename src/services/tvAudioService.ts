@@ -110,6 +110,16 @@ class TvAudioService {
   }
 
   pauseAllAudio() { this.bell?.pause(); this.media.forEach(element => element.pause()); if ('speechSynthesis' in window) window.speechSynthesis.pause(); this.emit() }
+  pauseForFocusLoss() {
+    this.bell?.pause()
+    this.soundtrack?.pause()
+    this.media.forEach(element => {
+      if (element instanceof HTMLVideoElement) element.muted = true
+      else element.pause()
+    })
+    if ('speechSynthesis' in window) window.speechSynthesis.pause()
+    this.emit()
+  }
   async resumeAudioContext() { if (this.context?.state === 'suspended') { try { await this.context.resume(); this.lastError = null } catch (error) { this.captureError(error, 'AudioContext suspenso e não pôde ser retomado.'); throw error } } this.emit() }
   setVolume(volume: number) { this.volume = Math.max(0, Math.min(1, volume)); if (this.gain) this.gain.gain.value = this.volume; this.emit() }
   setEnabled(enabled: boolean) { this.enabled = enabled; if (!enabled) this.pauseAllAudio(); this.emit() }
@@ -125,7 +135,7 @@ class TvAudioService {
 
   private handleVisibility = () => { if (document.hidden) this.pauseAllAudio(); else void this.resumeAudioContext() }
   private handleResume = () => { void this.resumeAudioContext(); if ('speechSynthesis' in window) window.speechSynthesis.resume() }
-  private handlePause = () => this.pauseAllAudio()
+  private handlePause = () => this.pauseForFocusLoss()
   private reportMediaError(element: HTMLMediaElement, fallback: string) { const code = element.error?.code; const reason = code === 4 ? 'Formato de áudio incompatível.' : code === 2 ? 'Arquivo de áudio não encontrado ou inacessível.' : fallback; this.captureError(new Error(reason), reason) }
   private captureError(error: unknown, fallback: string) { const name = error instanceof DOMException ? error.name : ''; this.lastError = name === 'NotAllowedError' ? 'Reprodução bloqueada: pressione “Iniciar exibição” novamente.' : error instanceof Error ? error.message : fallback; this.emit() }
   private emit() { const value = this.diagnostics(); this.listeners.forEach(listener => listener(value)) }
