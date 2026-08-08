@@ -9,6 +9,8 @@ import type {
 } from "../hooks/useTvData";
 import { supabase } from "../services/supabase";
 import { SoundPicker, type SoundSettings } from "./SoundPicker";
+import { ContentScheduleFields } from "./ContentScheduleFields";
+import { scheduleDatabaseValues, type ContentSchedule } from "./contentSchedule";
 
 export function EditProgrammingItem({
   companyId,
@@ -46,6 +48,11 @@ export function EditProgrammingItem({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sound, setSound] = useState<SoundSettings>({ mediaId: item.sound_media_id ?? null, media: item.sound_media ?? null, volume: item.sound_volume ?? .7, loop: item.sound_loop ?? true, muteOriginalAudio: item.mute_original_audio ?? false });
+  const [schedule, setSchedule] = useState<ContentSchedule>(() => ({
+    mode: item.media.starts_at || item.media.ends_at || item.media.start_time || item.media.end_time || item.media.weekdays?.length ? "scheduled" : "always",
+    startsAt: item.media.starts_at?.slice(0, 10) ?? "", endsAt: item.media.ends_at?.slice(0, 10) ?? "",
+    startTime: item.media.start_time?.slice(0, 5) ?? "", endTime: item.media.end_time?.slice(0, 5) ?? "", weekdays: item.media.weekdays ?? [],
+  }));
   const url = item.media.public_url ?? item.media.media_url;
 
   const toggleDisplay = (id: string) =>
@@ -81,6 +88,7 @@ export function EditProgrammingItem({
               : item.media.message_text,
           duration_seconds: Math.max(3, Math.min(300, duration)),
           animation: item.media.media_type === "image" ? animation : "none",
+          ...scheduleDatabaseValues(schedule),
         })
         .eq("id", item.media_id)
         .eq("company_id", companyId)
@@ -335,6 +343,7 @@ export function EditProgrammingItem({
               </div>
             ) : null}
             <SoundPicker companyId={companyId} value={sound} isVideo={item.media.media_type === "video"} onChange={setSound} />
+            <ContentScheduleFields value={schedule} onChange={setSchedule}/>
             <fieldset>
               <legend>Exibir nas TVs</legend>
               <div className="check-grid">

@@ -26,6 +26,8 @@ import {
 } from "../services/storage";
 import { supabase } from "../services/supabase";
 import { SoundPicker, type SoundSettings } from "./SoundPicker";
+import { ContentScheduleFields } from "./ContentScheduleFields";
+import { alwaysSchedule, scheduleDatabaseValues, type ContentSchedule } from "./contentSchedule";
 
 type ContentType = "message" | "image" | "video";
 interface FileInfo {
@@ -120,6 +122,7 @@ export function ContentComposer({
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const [sound, setSound] = useState<SoundSettings>({ mediaId: null, media: null, volume: .7, loop: true, muteOriginalAudio: false });
+  const [schedule, setSchedule] = useState<ContentSchedule>(alwaysSchedule);
   const selectedNames = useMemo(
     () =>
       displays
@@ -294,7 +297,7 @@ export function ContentComposer({
           mediaId = selected.mediaId;
           const { error: updateError } = await supabase
             .from("tv_media")
-            .update({ animation: type === "image" ? animation : "none" })
+            .update({ animation: type === "image" ? animation : "none", ...scheduleDatabaseValues(schedule) })
             .eq("id", mediaId)
             .eq("company_id", companyId);
           if (updateError) throw updateError;
@@ -366,12 +369,19 @@ export function ContentComposer({
             mime_type: file?.type ?? null,
             file_size: file?.size ?? null,
             r2_asset_id: r2AssetId,
+            ...scheduleDatabaseValues(schedule),
           })
           .select("id")
           .single();
         if (mediaError) throw mediaError;
         mediaId = media.id;
       }
+      const { error: scheduleError } = await supabase
+        .from("tv_media")
+        .update(scheduleDatabaseValues(schedule))
+        .eq("id", mediaId)
+        .eq("company_id", companyId);
+      if (scheduleError) throw scheduleError;
       const maxPosition = new Map<string, number>();
       for (const item of items)
         maxPosition.set(
@@ -805,6 +815,7 @@ export function ContentComposer({
                   required
                 />
               </label>
+              <ContentScheduleFields value={schedule} onChange={setSchedule}/>
               <fieldset>
                 <legend>Exibir nas TVs</legend>
                 {displays.length === 0 ? (
