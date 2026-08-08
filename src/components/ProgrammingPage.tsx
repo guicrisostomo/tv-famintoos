@@ -9,14 +9,12 @@ import { ContentComposer } from './ContentComposer'
 import { EditProgrammingItem } from './EditProgrammingItem'
 import { PreviewPanel } from './PreviewPanel'
 import { hasItemSchedule, isItemScheduledOnDate } from './programSchedule'
-import { PlannerPage } from './PlannerPage'
 
 const hasSchedule = hasItemSchedule
 
 export function ProgrammingPage({ companyId, displays, items, onReload }: { companyId: string; displays: TvDisplayRecord[]; items: TvPlaylistRecord[]; onReload: () => Promise<void> }) {
   const [composerOpen, setComposerOpen] = useState(false)
   const [editingItem, setEditingItem] = useState<TvPlaylistRecord | null>(null)
-  const [plannerOpen, setPlannerOpen] = useState(false)
   const [selectedDisplay, setSelectedDisplay] = useState(displays[0]?.id ?? '')
   const todayItems = useMemo(() => items.filter(item => isItemScheduledOnDate(item, new Date())), [items])
   const visibleItems = selectedDisplay ? todayItems.filter(item => item.display_id === selectedDisplay) : todayItems
@@ -49,10 +47,8 @@ export function ProgrammingPage({ companyId, displays, items, onReload }: { comp
     </SortableContext>
   </DndContext>
 
-  if (plannerOpen) return <><button className="button secondary planner-back" onClick={() => setPlannerOpen(false)}>← Voltar para programação</button><PlannerPage displays={displays} items={items}/></>
-
   return <>
-    <div className="page-header"><div><h1>Programação de hoje</h1><p>A sequência abaixo mostra somente os conteúdos válidos para a data atual.</p></div><div className="page-actions"><button className="button secondary" onClick={() => setPlannerOpen(true)}><CalendarDays size={16}/> Abrir planner</button><button className="button primary" onClick={() => setComposerOpen(true)}><Plus size={16}/> Adicionar conteúdo</button></div></div>
+    <div className="page-header"><div><h1>Programação de hoje</h1><p>A sequência abaixo mostra somente os conteúdos válidos para a data atual.</p></div><div className="page-actions"><button className="button primary" onClick={() => setComposerOpen(true)}><Plus size={16}/> Adicionar conteúdo</button></div></div>
 
     <section className="card programming-control">
       <div className="programming-tv-select"><div><span className="step-label">1. Escolha onde configurar</span><strong>{selectedTv?.name ?? 'Visão geral de todas as TVs'}</strong><small>{selectedTv?.description ?? (selectedDisplay ? 'TV selecionada' : 'Os conteúdos estão agrupados por televisão.')}</small></div><label>Televisão<select value={selectedDisplay} onChange={event => setSelectedDisplay(event.target.value)}><option value="">Todas as TVs</option>{displays.map(display => <option key={display.id} value={display.id}>{display.name}</option>)}</select></label>{selectedDisplay ? <a className="button secondary" href={`/tv/${companyId}/${selectedDisplay}`} target="_blank" rel="noreferrer"><ExternalLink size={15}/> Abrir TV</a> : null}</div>

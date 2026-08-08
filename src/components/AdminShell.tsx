@@ -23,6 +23,7 @@ import { ProgrammingPage } from './ProgrammingPage';
 import { PromotionEditorPage } from './PromotionEditorPage';
 import { PromotionsPage } from './PromotionsPage';
 import { TvSetupPage } from './TvSetupPage';
+import { PlannerPage } from './PlannerPage';
 
 const navigation = [
   ['Início', Home],
@@ -176,6 +177,12 @@ export function AdminShell({
               displays={tvData.displays}
               items={tvData.items}
               onReload={tvData.reload}
+            />
+          ) : null}
+          {page === 'Planejamento' ? (
+            <PlannerPage
+              displays={tvData.displays}
+              items={tvData.items}
             />
           ) : null}
           {page === 'Chamadas' ? (
