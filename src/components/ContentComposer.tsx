@@ -103,7 +103,9 @@ export function ContentComposer({
   const [message, setMessage] = useState("");
   const [duration, setDuration] = useState(10);
   const [file, setFile] = useState<File | null>(null);
-  const [selectedDisplays, setSelectedDisplays] = useState<string[]>([]);
+  const [selectedDisplays, setSelectedDisplays] = useState<string[]>(() =>
+    displays.map((display) => display.id),
+  );
   const [fileInfo, setFileInfo] = useState<FileInfo | null>(null);
   const [mediaSource, setMediaSource] = useState<"upload" | "r2">("upload");
   const [r2Objects, setR2Objects] = useState<AvailableMedia[]>([]);

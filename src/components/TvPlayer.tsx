@@ -1022,6 +1022,7 @@ function Media({
   const saved = readPlayback(item.companyId, displayId);
   const attachedVideo = useRef<HTMLVideoElement | null>(null);
   const playbackStarted = useRef(false);
+  const [videoReady, setVideoReady] = useState(false);
   const attachVideo = useCallback(
     (video: HTMLVideoElement | null) => {
       const previous = attachedVideo.current;
@@ -1079,21 +1080,23 @@ function Media({
   }, [item, onError, saved, soundEnabled, videoRef]);
   return (
     <div
-      className="media-layer"
+      className={`media-layer ${item.media.type === "video" ? "media-layer-video" : ""}`}
       style={{ "--media-fit": item.fit } as React.CSSProperties}
     >
       {item.media.type === "video" && url ? (
         <video
+          className="tv-video"
           ref={attachVideo}
           src={url}
-          preload="metadata"
-          autoPlay
+          preload="auto"
           muted
           controls={false}
           disablePictureInPicture
           onLoadedMetadata={() => void restoreAndPlay()}
-          onLoadedData={() => void restoreAndPlay()}
+          onLoadStart={() => setVideoReady(false)}
+          onLoadedData={() => { setVideoReady(true); void restoreAndPlay(); }}
           onCanPlay={() => void restoreAndPlay()}
+          onPlaying={() => setVideoReady(true)}
           onEnded={onEnded}
           onError={(event) =>
             onError(mediaPlaybackError(event.currentTarget, item))
@@ -1101,6 +1104,7 @@ function Media({
           playsInline
         />
       ) : null}
+      {item.media.type === "video" && !videoReady ? <div className="video-loading" aria-hidden="true" /> : null}
       {item.media.type === "image" && url ? (
         <>
           {item.fit === "blur_background" ? (

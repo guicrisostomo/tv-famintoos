@@ -16,7 +16,7 @@ export function ProgrammingPage({ companyId, displays, items, onReload }: { comp
   const [composerOpen, setComposerOpen] = useState(false)
   const [editingItem, setEditingItem] = useState<TvPlaylistRecord | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [selectedDisplay, setSelectedDisplay] = useState(displays[0]?.id ?? '')
+  const [selectedDisplay, setSelectedDisplay] = useState('')
   const todayItems = useMemo(() => items.filter(item => isItemScheduledOnDate(item, new Date())), [items])
   const visibleItems = selectedDisplay ? todayItems.filter(item => item.display_id === selectedDisplay) : todayItems
   const selectedTv = displays.find(display => display.id === selectedDisplay)
