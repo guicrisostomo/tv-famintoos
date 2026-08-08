@@ -34,6 +34,9 @@ interface FileInfo {
   width: number;
   height: number;
   duration?: number;
+  videoCodec?: string;
+  videoLevel?: number;
+  hasAudio?: boolean;
 }
 type AvailableMedia = R2ExistingObject & {
   mediaId?: string;
@@ -65,6 +68,11 @@ async function inspectFile(
   if (type === "video") {
     const url = URL.createObjectURL(file);
     try {
+      const metadata = await inspectMp4(file);
+      if (metadata.videoCodec === "H.265/HEVC")
+        throw new Error("Vídeo incompatível com a TV. Converta para MP4 com vídeo H.264 e áudio AAC.");
+      if ((metadata.videoLevel ?? 0) > 4.1)
+        throw new Error(`Vídeo H.264 nível ${metadata.videoLevel?.toFixed(1)} incompatível com o Fully Kiosk. Converta para H.264 nível 4.1 ou inferior, com áudio AAC.`);
       return await new Promise((resolve, reject) => {
         const video = document.createElement("video");
         video.preload = "metadata";
@@ -73,6 +81,7 @@ async function inspectFile(
             width: video.videoWidth,
             height: video.videoHeight,
             duration: video.duration,
+            ...metadata,
           });
         video.onerror = () =>
           reject(new Error("Vídeo inválido ou incompatível."));
@@ -83,6 +92,36 @@ async function inspectFile(
     }
   }
   return null;
+}
+
+async function inspectMp4(file: File) {
+  const sampleSize = Math.min(file.size, 4 * 1024 * 1024);
+  const first = new Uint8Array(await file.slice(0, sampleSize).arrayBuffer());
+  const last = file.size > sampleSize
+    ? new Uint8Array(await file.slice(Math.max(sampleSize, file.size - sampleSize)).arrayBuffer())
+    : new Uint8Array();
+  const find = (bytes: Uint8Array, value: string) => {
+    const target = new TextEncoder().encode(value);
+    outer: for (let index = 0; index <= bytes.length - target.length; index += 1) {
+      for (let offset = 0; offset < target.length; offset += 1)
+        if (bytes[index + offset] !== target[offset]) continue outer;
+      return index;
+    }
+    return -1;
+  };
+  const locate = (value: string) => {
+    const firstIndex = find(first, value);
+    return firstIndex >= 0 ? { bytes: first, index: firstIndex } : { bytes: last, index: find(last, value) };
+  };
+  const avc = locate("avcC");
+  const hevc = locate("hvc1");
+  const hev1 = locate("hev1");
+  const hasAudio = locate("mp4a").index >= 0;
+  return {
+    videoCodec: avc.index >= 0 ? "H.264" : hevc.index >= 0 || hev1.index >= 0 ? "H.265/HEVC" : "desconhecido",
+    videoLevel: avc.index >= 0 && avc.index + 7 < avc.bytes.length ? avc.bytes[avc.index + 7] / 10 : undefined,
+    hasAudio,
+  };
 }
 
 export function ContentComposer({
@@ -808,6 +847,12 @@ export function ContentComposer({
                       O conteúdo será encaixado sem deformação.
                     </span>
                   </div>
+                  {type === "video" && fileInfo && !fileInfo.hasAudio ? (
+                    <div className="resolution-note warning" role="status">
+                      <strong>Este vídeo não contém faixa de áudio</strong>
+                      <span>Ele será exibido sem som. Escolha outro arquivo ou adicione uma trilha em “Som da mídia”.</span>
+                    </div>
+                  ) : null}
                 </>
               )}
               <label>

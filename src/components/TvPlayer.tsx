@@ -50,7 +50,7 @@ export function TvPlayer({
   companyId: string;
   displayId: string;
 }) {
-  const [activated, setActivated] = useState(true);
+  const [activated, setActivated] = useState(false);
   const [activating, setActivating] = useState(false);
   const [activationError, setActivationError] = useState<string | null>(null);
   const [soundEnabled, setSoundEnabled] = useState(true);
@@ -128,16 +128,6 @@ export function TvPlayer({
     const unsubscribeRuntime = diagnosticMode
       ? runtime.subscribe(setPlayerDiagnostics)
       : () => undefined;
-    void tvAudioService
-      .unlockAudio()
-      .then(() => setActivationError(null))
-      .catch((error) =>
-        setActivationError(
-          error instanceof Error
-            ? error.message
-            : "O navegador bloqueou o áudio.",
-        ),
-      );
     return () => {
       unsubscribe();
       unsubscribeRuntime();
@@ -854,6 +844,11 @@ export function TvPlayer({
         displayId={displayId}
         videoRef={videoRef}
         soundEnabled={soundEnabled}
+        audioActivated={activated}
+        onVideoEvent={(event, video) => {
+          if (diagnosticMode)
+            runtime.lifecycle(`video:${event} ready=${video.readyState} network=${video.networkState} time=${video.currentTime.toFixed(1)} muted=${video.muted}`);
+        }}
         onEnded={() => setIndex((i) => (i + 1) % items.length)}
         onError={(error) => {
           runtime.error(error);
@@ -863,7 +858,7 @@ export function TvPlayer({
       {activeInterruption ? (
         <CallOverlay interruption={activeInterruption} />
       ) : null}
-      {activationError ? (
+      {!activated || activationError ? (
         <AudioUnlock onClick={activate} activating={activating} />
       ) : null}
       {diagnosticMode ? (
@@ -890,7 +885,7 @@ function AudioUnlock({
       onClick={() => void onClick()}
       disabled={activating}
     >
-      {activating ? "Ativando som..." : "Ativar som"}
+      {activating ? "Iniciando exibição..." : "Iniciar exibição"}
     </button>
   );
 }
@@ -1008,6 +1003,8 @@ function Media({
   displayId,
   videoRef,
   soundEnabled,
+  audioActivated,
+  onVideoEvent,
   onEnded,
   onError,
 }: {
@@ -1015,6 +1012,8 @@ function Media({
   displayId: string;
   videoRef: React.RefObject<HTMLVideoElement | null>;
   soundEnabled: boolean;
+  audioActivated: boolean;
+  onVideoEvent: (event: string, video: HTMLVideoElement) => void;
   onEnded: () => void;
   onError: (error: Error) => void;
 }) {
@@ -1022,7 +1021,6 @@ function Media({
   const saved = readPlayback(item.companyId, displayId);
   const attachedVideo = useRef<HTMLVideoElement | null>(null);
   const playbackStarted = useRef(false);
-  const [videoReady, setVideoReady] = useState(false);
   const attachVideo = useCallback(
     (video: HTMLVideoElement | null) => {
       const previous = attachedVideo.current;
@@ -1067,7 +1065,7 @@ function Media({
       onError(mediaPlaybackError(video, item));
       return;
     }
-    if (soundEnabled && !item.muted && !item.soundtrack?.muteOriginalAudio) {
+    if (audioActivated && soundEnabled && !item.muted && !item.soundtrack?.muteOriginalAudio) {
       video.muted = false;
       try {
         await tvAudioService.playMediaAudio(video, item.volume);
@@ -1077,7 +1075,22 @@ function Media({
         if (video.paused) void playVideo(video).catch(() => undefined);
       }
     }
-  }, [item, onError, saved, soundEnabled, videoRef]);
+  }, [audioActivated, item, onError, saved, soundEnabled, videoRef]);
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video || item.media.type !== "video") return;
+    const audible = audioActivated && soundEnabled && !item.muted && !item.soundtrack?.muteOriginalAudio;
+    if (!audible) {
+      video.muted = true;
+      return;
+    }
+    video.muted = false;
+    void tvAudioService.playMediaAudio(video, item.volume).catch(() => {
+      video.muted = true;
+      if (video.paused) void playVideo(video).catch(() => undefined);
+    });
+  }, [audioActivated, item, soundEnabled, videoRef]);
   return (
     <div
       className={`media-layer ${item.media.type === "video" ? "media-layer-video" : ""}`}
@@ -1092,11 +1105,12 @@ function Media({
           muted
           controls={false}
           disablePictureInPicture
-          onLoadedMetadata={() => void restoreAndPlay()}
-          onLoadStart={() => setVideoReady(false)}
-          onLoadedData={() => { setVideoReady(true); void restoreAndPlay(); }}
-          onCanPlay={() => void restoreAndPlay()}
-          onPlaying={() => setVideoReady(true)}
+          onLoadedMetadata={(event) => { onVideoEvent("loadedmetadata", event.currentTarget); void restoreAndPlay(); }}
+          onLoadedData={(event) => { onVideoEvent("loadeddata", event.currentTarget); void restoreAndPlay(); }}
+          onCanPlay={(event) => { onVideoEvent("canplay", event.currentTarget); void restoreAndPlay(); }}
+          onPlaying={(event) => onVideoEvent("playing", event.currentTarget)}
+          onWaiting={(event) => onVideoEvent("waiting", event.currentTarget)}
+          onStalled={(event) => onVideoEvent("stalled", event.currentTarget)}
           onEnded={onEnded}
           onError={(event) =>
             onError(mediaPlaybackError(event.currentTarget, item))
@@ -1104,7 +1118,6 @@ function Media({
           playsInline
         />
       ) : null}
-      {item.media.type === "video" && !videoReady ? <div className="video-loading" aria-hidden="true" /> : null}
       {item.media.type === "image" && url ? (
         <>
           {item.fit === "blur_background" ? (
