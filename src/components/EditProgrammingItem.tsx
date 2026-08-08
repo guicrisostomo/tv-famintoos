@@ -47,6 +47,7 @@ export function EditProgrammingItem({
   );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<"content" | "schedule" | "tvs">("content");
   const [sound, setSound] = useState<SoundSettings>({ mediaId: item.sound_media_id ?? null, media: item.sound_media ?? null, volume: item.sound_volume ?? .7, loop: item.sound_loop ?? true, muteOriginalAudio: item.mute_original_audio ?? false });
   const [schedule, setSchedule] = useState<ContentSchedule>(() => ({
     mode: item.media.starts_at || item.media.ends_at || item.media.start_time || item.media.end_time || item.media.weekdays?.length ? "scheduled" : "always",
@@ -214,8 +215,9 @@ export function EditProgrammingItem({
             <X size={20} />
           </button>
         </div>
-        <form onSubmit={save}>
-          <div className="editor-form">
+        <form onSubmit={save} noValidate>
+          <div className="form-tabs" role="tablist" aria-label="Etapas da programação"><button type="button" role="tab" aria-selected={activeTab === "content"} className={activeTab === "content" ? "active" : ""} onClick={() => setActiveTab("content")}>1. Conteúdo</button><button type="button" role="tab" aria-selected={activeTab === "schedule"} className={activeTab === "schedule" ? "active" : ""} onClick={() => setActiveTab("schedule")}>2. Quando exibir</button><button type="button" role="tab" aria-selected={activeTab === "tvs"} className={activeTab === "tvs" ? "active" : ""} onClick={() => setActiveTab("tvs")}>3. TVs</button></div>
+          <div className="form-tab-panel editor-form" hidden={activeTab !== "content"}>
             {url && item.media.media_type === "image" ? (
               <div className={`image-motion-preview image-fit-${imageFit}`}>
                 {imageFit === "blur_background" ? (
@@ -343,7 +345,11 @@ export function EditProgrammingItem({
               </div>
             ) : null}
             <SoundPicker companyId={companyId} value={sound} isVideo={item.media.media_type === "video"} onChange={setSound} />
+          </div>
+          <div className="form-tab-panel editor-form" hidden={activeTab !== "schedule"}>
             <ContentScheduleFields value={schedule} onChange={setSchedule}/>
+          </div>
+          <div className="form-tab-panel editor-form" hidden={activeTab !== "tvs"}>
             <fieldset>
               <legend>Exibir nas TVs</legend>
               <div className="check-grid">
@@ -359,12 +365,12 @@ export function EditProgrammingItem({
                 ))}
               </div>
             </fieldset>
+          </div>
             {error ? (
               <div className="form-error" role="alert">
                 {error}
               </div>
             ) : null}
-          </div>
           <div className="modal-actions">
             <button
               type="button"

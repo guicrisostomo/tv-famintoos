@@ -121,6 +121,7 @@ export function ContentComposer({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  const [activeTab, setActiveTab] = useState<"content" | "schedule" | "tvs">("content");
   const [sound, setSound] = useState<SoundSettings>({ mediaId: null, media: null, volume: .7, loop: true, muteOriginalAudio: false });
   const [schedule, setSchedule] = useState<ContentSchedule>(alwaysSchedule);
   const selectedNames = useMemo(
@@ -472,7 +473,9 @@ export function ContentComposer({
             </div>
           </div>
         ) : (
-          <form onSubmit={submit}>
+          <form onSubmit={submit} noValidate>
+            <div className="form-tabs" role="tablist" aria-label="Etapas do conteúdo"><button type="button" role="tab" aria-selected={activeTab === "content"} className={activeTab === "content" ? "active" : ""} onClick={() => setActiveTab("content")}>1. Conteúdo</button><button type="button" role="tab" aria-selected={activeTab === "schedule"} className={activeTab === "schedule" ? "active" : ""} onClick={() => setActiveTab("schedule")}>2. Quando exibir</button><button type="button" role="tab" aria-selected={activeTab === "tvs"} className={activeTab === "tvs" ? "active" : ""} onClick={() => setActiveTab("tvs")}>3. TVs</button></div>
+            <div className="form-tab-panel" hidden={activeTab !== "content"}>
             <div className="content-type-picker three">
               <button
                 type="button"
@@ -815,7 +818,11 @@ export function ContentComposer({
                   required
                 />
               </label>
+            </div></div>
+            <div className="form-tab-panel editor-form" hidden={activeTab !== "schedule"}>
               <ContentScheduleFields value={schedule} onChange={setSchedule}/>
+            </div>
+            <div className="form-tab-panel editor-form" hidden={activeTab !== "tvs"}>
               <fieldset>
                 <legend>Exibir nas TVs</legend>
                 {displays.length === 0 ? (
@@ -837,12 +844,12 @@ export function ContentComposer({
                   </div>
                 )}
               </fieldset>
+            </div>
               {error ? (
                 <div className="form-error" role="alert">
                   {error}
                 </div>
               ) : null}
-            </div>
             <div className="modal-actions">
               <button
                 type="button"

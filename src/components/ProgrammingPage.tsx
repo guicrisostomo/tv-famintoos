@@ -8,23 +8,30 @@ import { supabase } from '../services/supabase'
 import { ContentComposer } from './ContentComposer'
 import { EditProgrammingItem } from './EditProgrammingItem'
 import { PreviewPanel } from './PreviewPanel'
+import { hasItemSchedule, isItemScheduledOnDate } from './programSchedule'
+import { PlannerPage } from './PlannerPage'
+
+const hasSchedule = hasItemSchedule
 
 export function ProgrammingPage({ companyId, displays, items, onReload }: { companyId: string; displays: TvDisplayRecord[]; items: TvPlaylistRecord[]; onReload: () => Promise<void> }) {
   const [composerOpen, setComposerOpen] = useState(false)
   const [editingItem, setEditingItem] = useState<TvPlaylistRecord | null>(null)
+  const [plannerOpen, setPlannerOpen] = useState(false)
   const [selectedDisplay, setSelectedDisplay] = useState(displays[0]?.id ?? '')
-  const visibleItems = selectedDisplay ? items.filter(item => item.display_id === selectedDisplay) : items
+  const todayItems = useMemo(() => items.filter(item => isItemScheduledOnDate(item, new Date())), [items])
+  const visibleItems = selectedDisplay ? todayItems.filter(item => item.display_id === selectedDisplay) : todayItems
   const selectedTv = displays.find(display => display.id === selectedDisplay)
   const displayNames = useMemo(() => new Map(displays.map(display => [display.id, display.name])), [displays])
   const groupedItems = useMemo(() => displays.map(display => ({ display, items: visibleItems.filter(item => item.display_id === display.id) })).filter(group => group.items.length), [displays, visibleItems])
-  const scheduledCount = visibleItems.filter(item => hasSchedule(item)).length
+  const scheduledCount = visibleItems.filter(item => hasItemSchedule(item)).length
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }))
 
   const moveItem = async ({ active, over }: DragEndEvent) => {
     if (!selectedDisplay || !over || active.id === over.id || !supabase) return
     const client = supabase
     const reordered = arrayMove(visibleItems, visibleItems.findIndex(item => item.id === active.id), visibleItems.findIndex(item => item.id === over.id))
-    await Promise.all(reordered.map((item, position) => client.from('tv_playlist_items').update({ position }).eq('id', item.id).eq('company_id', companyId)))
+    const availablePositions = visibleItems.map(item => item.position).sort((a, b) => a - b)
+    await Promise.all(reordered.map((item, index) => client.from('tv_playlist_items').update({ position: availablePositions[index] }).eq('id', item.id).eq('company_id', companyId)))
     await onReload()
   }
 
@@ -42,8 +49,10 @@ export function ProgrammingPage({ companyId, displays, items, onReload }: { comp
     </SortableContext>
   </DndContext>
 
+  if (plannerOpen) return <><button className="button secondary planner-back" onClick={() => setPlannerOpen(false)}>← Voltar para programação</button><PlannerPage displays={displays} items={items}/></>
+
   return <>
-    <div className="page-header"><div><h1>Programação</h1><p>Escolha uma TV, organize os conteúdos e defina quando cada um será exibido.</p></div><button className="button primary" onClick={() => setComposerOpen(true)}><Plus size={16}/> Adicionar conteúdo</button></div>
+    <div className="page-header"><div><h1>Programação de hoje</h1><p>A sequência abaixo mostra somente os conteúdos válidos para a data atual.</p></div><div className="page-actions"><button className="button secondary" onClick={() => setPlannerOpen(true)}><CalendarDays size={16}/> Abrir planner</button><button className="button primary" onClick={() => setComposerOpen(true)}><Plus size={16}/> Adicionar conteúdo</button></div></div>
 
     <section className="card programming-control">
       <div className="programming-tv-select"><div><span className="step-label">1. Escolha onde configurar</span><strong>{selectedTv?.name ?? 'Visão geral de todas as TVs'}</strong><small>{selectedTv?.description ?? (selectedDisplay ? 'TV selecionada' : 'Os conteúdos estão agrupados por televisão.')}</small></div><label>Televisão<select value={selectedDisplay} onChange={event => setSelectedDisplay(event.target.value)}><option value="">Todas as TVs</option>{displays.map(display => <option key={display.id} value={display.id}>{display.name}</option>)}</select></label>{selectedDisplay ? <a className="button secondary" href={`/tv/${companyId}/${selectedDisplay}`} target="_blank" rel="noreferrer"><ExternalLink size={15}/> Abrir TV</a> : null}</div>
@@ -64,14 +73,9 @@ function SortableItem({ item, displayName, canReorder, onEdit, onRemove }: { ite
   return <article ref={setNodeRef} className="timeline-item programming-item" style={{ transform: CSS.Transform.toString(transform), transition }}><button className="drag button" aria-label={`Reordenar ${item.media.title}`} disabled={!canReorder} {...attributes} {...listeners}><GripVertical size={18}/></button><MediaThumbnail item={item} url={mediaUrl}/><div className="timeline-copy"><div className="programming-item-title"><strong>{item.media.title}</strong>{displayName ? <span className="tv-name">{displayName}</span> : null}</div><div className="content-meta"><span>{typeLabel}</span><span>{item.media.duration_seconds ?? 10} segundos</span></div>{item.media.media_type === 'message' && item.media.message_text ? <small>{item.media.message_text}</small> : null}<div className={`schedule-summary ${hasSchedule(item) ? 'scheduled' : ''}`}><CalendarDays size={15}/><div><strong>{hasSchedule(item) ? 'Exibição programada' : 'Exibir sempre'}</strong><span>{scheduleSummary(item)}</span></div></div></div><div className="timeline-actions"><button className="button secondary configure-button" onClick={() => onEdit(item)}><Pencil size={15}/> Configurar</button>{item.media.media_type === 'image' && mediaUrl ? <button className="icon-button" onClick={() => void downloadImage(mediaUrl, item.media.title)} aria-label={`Baixar ${item.media.title}`} title="Salvar imagem"><Download size={16}/></button> : null}<button className="icon-button danger" onClick={() => void onRemove(item.id)} aria-label={`Remover ${item.media.title}`} title="Remover"><Trash2 size={16}/></button></div></article>
 }
 
-function hasSchedule(item: TvPlaylistRecord) {
-  const media = item.media
-  return Boolean(media.starts_at || media.ends_at || media.start_time || media.end_time || media.weekdays?.length)
-}
-
 function scheduleSummary(item: TvPlaylistRecord) {
   const media = item.media
-  if (!hasSchedule(item)) return 'Todos os dias, durante todo o dia'
+  if (!hasItemSchedule(item)) return 'Todos os dias, durante todo o dia'
   const names = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
   const days = media.weekdays?.length ? media.weekdays.map(day => names[day]).join(', ') : 'Todos os dias'
   const time = media.start_time || media.end_time ? ` · ${media.start_time?.slice(0, 5) ?? '00:00'} até ${media.end_time?.slice(0, 5) ?? '23:59'}` : ''
