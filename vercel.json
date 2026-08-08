@@ -3,6 +3,9 @@
   "rewrites": [
     { "source": "/tv/:path*", "destination": "/index.html" }
   ],
+  "functions": {
+    "api/tv/media/normalize-video.ts": { "maxDuration": 300 }
+  },
   "crons": [
     { "path": "/api/cron/cleanup-unused-media", "schedule": "0 3 * * *" }
   ]

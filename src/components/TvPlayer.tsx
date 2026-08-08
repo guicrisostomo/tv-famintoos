@@ -12,6 +12,7 @@ import { selectNextInterruption } from "../services/playerQueue";
 import { supabase } from "../services/supabase";
 import type { TvPlaylistRecord } from "../hooks/useTvData";
 import { useDeploymentRefresh } from "../hooks/useDeploymentRefresh";
+import { normalizeTvVideo } from "../services/storage";
 import {
   tvAudioService,
   type TvAudioDiagnostics,
@@ -74,6 +75,7 @@ export function TvPlayer({
   const [activeInterruption, setActiveInterruption] =
     useState<Interruption | null>(null);
   const processedCalls = useRef(readProcessedCalls(displayId));
+  const normalizingVideos = useRef(new Set<string>());
   const videoRef = useRef<HTMLVideoElement>(null);
   const loadingRef = useRef(false);
   const loadAgainRef = useRef(false);
@@ -159,7 +161,7 @@ export function TvPlayer({
         supabase
           .from("tv_playlist_items")
           .select(
-            "id,display_id,media_id,position,is_active,image_fit,caption_text,caption_animation,sound_media_id,sound_volume,sound_loop,mute_original_audio,media:tv_media!tv_playlist_items_media_id_fkey(id,title,media_type,media_url,message_text,duration_seconds,public_url,storage_provider,animation,starts_at,ends_at,weekdays,start_time,end_time),sound_media:tv_media!tv_playlist_items_sound_media_id_fkey(id,title,media_type,media_url,message_text,duration_seconds,public_url,storage_provider,animation)",
+            "id,display_id,media_id,position,is_active,image_fit,caption_text,caption_animation,sound_media_id,sound_volume,sound_loop,mute_original_audio,media:tv_media!tv_playlist_items_media_id_fkey(id,title,media_type,media_url,message_text,duration_seconds,public_url,storage_provider,storage_key,animation,starts_at,ends_at,weekdays,start_time,end_time),sound_media:tv_media!tv_playlist_items_sound_media_id_fkey(id,title,media_type,media_url,message_text,duration_seconds,public_url,storage_provider,animation)",
           )
           .eq("company_id", companyId)
           .eq("display_id", displayId)
@@ -242,6 +244,7 @@ export function TvPlayer({
             publicUrl: item.media.public_url,
             storageProvider: item.media.storage_provider as
               "cloudflare_r2" | "supabase_storage" | "external_url" | null,
+            storageKey: item.media.storage_key,
             animation: item.media.animation ?? "none",
             title:
               item.media.media_type === "message"
@@ -568,6 +571,20 @@ export function TvPlayer({
       recoveries: 0,
     };
   }, [current?.id, current?.media.title, index, runtime]);
+
+  useEffect(() => {
+    const storageKey = current?.media.storageKey;
+    if (!activated || current?.media.type !== "video" || !storageKey || storageKey.includes("/compatible/") || normalizingVideos.current.has(current.media.id)) return;
+    normalizingVideos.current.add(current.media.id);
+    runtime.lifecycle(`otimizando vídeo incompatível: ${current.media.title ?? current.media.id}`);
+    const timer = runtime.timeout(() => {
+      if (items.length > 1) setIndex(value => (value + 1) % items.length);
+      void normalizeTvVideo(current.media.id)
+        .then(() => { runtime.lifecycle(`vídeo otimizado: ${current.media.title ?? current.media.id}`); return loadRef.current(); })
+        .catch(error => { normalizingVideos.current.delete(current.media.id); runtime.error(error); });
+    }, 800);
+    return () => runtime.clear(timer);
+  }, [activated, current?.media.id, current?.media.storageKey, current?.media.title, current?.media.type, items.length, runtime]);
 
   useEffect(() => {
     if (!activated || activeInterruption || !soundEnabled || !current?.soundtrack) {

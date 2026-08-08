@@ -80,6 +80,15 @@ export async function deleteTvMedia(mediaId: string) {
     );
 }
 
+export async function normalizeTvVideo(mediaId: string) {
+  const response = await authenticatedFetch('/api/tv/media/normalize-video', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mediaId }),
+  })
+  const result = await response.json().catch(() => ({})) as { error?: string; optimized?: boolean }
+  if (!response.ok) throw new Error(result.error ?? `Falha ao otimizar vídeo (HTTP ${response.status}).`)
+  return result
+}
+
 export async function listUnregisteredR2Objects() {
   const response = await authenticatedFetch("/api/tv/media/r2-objects");
   const result = (await response.json().catch(() => ({}))) as {
