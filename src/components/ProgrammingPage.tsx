@@ -15,6 +15,7 @@ const hasSchedule = hasItemSchedule
 export function ProgrammingPage({ companyId, displays, items, onReload }: { companyId: string; displays: TvDisplayRecord[]; items: TvPlaylistRecord[]; onReload: () => Promise<void> }) {
   const [composerOpen, setComposerOpen] = useState(false)
   const [editingItem, setEditingItem] = useState<TvPlaylistRecord | null>(null)
+  const [error, setError] = useState<string | null>(null)
   const [selectedDisplay, setSelectedDisplay] = useState(displays[0]?.id ?? '')
   const todayItems = useMemo(() => items.filter(item => isItemScheduledOnDate(item, new Date())), [items])
   const visibleItems = selectedDisplay ? todayItems.filter(item => item.display_id === selectedDisplay) : todayItems
@@ -33,21 +34,27 @@ export function ProgrammingPage({ companyId, displays, items, onReload }: { comp
     await onReload()
   }
 
-  const removeItem = async (id: string) => {
-    if (!supabase || !window.confirm('Remover este item da programação desta TV?')) return
-    const { data, error } = await supabase.from('tv_playlist_items').delete().eq('id', id).eq('company_id', companyId).select('id')
-    if (error) throw error
-    if (!data?.length) throw new Error('Item não encontrado ou remoção não autorizada.')
+  const removeItem = async (item: TvPlaylistRecord) => {
+    if (!supabase || !window.confirm(`Excluir “${item.media.title}” da programação de todas as TVs?`)) return
+    setError(null)
+    const { data, error: deleteError } = await supabase.from('tv_playlist_items').delete().eq('media_id', item.media_id).eq('company_id', companyId).select('id')
+    if (deleteError) { setError(deleteError.message); return }
+    if (!data?.length) { setError('Conteúdo não encontrado ou remoção não autorizada.'); return }
     await onReload()
+  }
+  const removeItemById = async (id: string) => {
+    const item = items.find(candidate => candidate.id === id)
+    if (item) await removeItem(item)
   }
 
   const contentList = (list: TvPlaylistRecord[], showTvName: boolean) => <DndContext sensors={sensors} onDragEnd={moveItem}>
     <SortableContext items={list} strategy={verticalListSortingStrategy}>
-      <div className="timeline">{list.map(item => <SortableItem key={item.id} item={item} displayName={showTvName ? displayNames.get(item.display_id) : undefined} canReorder={Boolean(selectedDisplay)} onEdit={setEditingItem} onRemove={removeItem}/>)}</div>
+      <div className="timeline">{list.map(item => <SortableItem key={item.id} item={item} displayName={showTvName ? displayNames.get(item.display_id) : undefined} canReorder={Boolean(selectedDisplay)} onEdit={setEditingItem} onRemove={removeItemById}/>)}</div>
     </SortableContext>
   </DndContext>
 
   return <>
+    {error ? <div className="system-alert error" role="alert">{error}</div> : null}
     <div className="page-header"><div><h1>Programação de hoje</h1><p>A sequência abaixo mostra somente os conteúdos válidos para a data atual.</p></div><div className="page-actions"><button className="button primary" onClick={() => setComposerOpen(true)}><Plus size={16}/> Adicionar conteúdo</button></div></div>
 
     <section className="card programming-control">
