@@ -1,9 +1,8 @@
-import { QRCodeSVG } from 'qrcode.react';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { Interruption, PlayerPayload, ProgramItem } from '../domain/tv';
+import type { Interruption, PlayerPayload } from '../domain/tv';
 import { useDeploymentRefresh } from '../hooks/useDeploymentRefresh';
 import type { TvPlaylistRecord } from '../hooks/useTvData';
-import { isPlayableMedia, resolveMediaUrl } from '../services/media';
+import { isPlayableMedia, playVideoElement, resolveMediaUrl } from '../services/media';
 import { readPayload, readPlayback, savePayload, savePlayback } from '../services/playerCache';
 import { selectNextInterruption } from '../services/playerQueue';
 import {
@@ -15,6 +14,7 @@ import { normalizeTvVideo } from '../services/storage';
 import { supabase } from '../services/supabase';
 import { tvAudioService, type TvAudioDiagnostics } from '../services/tvAudioService';
 import { TvPlayerRuntime, type TvPlayerDiagnostics } from '../services/tvPlayerRuntime';
+import { TvMediaStage } from './TvMediaStage';
 
 const activationKey = (displayId: string) => `famintoos-tv:activated:${displayId}`;
 const processedCallsKey = (displayId: string) => `famintoos-tv:processed-calls:${displayId}`;
@@ -38,6 +38,10 @@ export function TvPlayer({ companyId, displayId }: { companyId: string; displayI
     message: string;
     failed?: boolean;
   } | null>(null);
+  const [playbackError, setPlaybackError] = useState<{
+    itemId: string;
+    message: string;
+  } | null>(null);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [callSettings, setCallSettings] = useState<CallSpeechSettings>(defaultCallSpeechSettings);
   const [businessName, setBusinessName] = useState('');
@@ -51,7 +55,8 @@ export function TvPlayer({ companyId, displayId }: { companyId: string; displayI
   const [payload, setPayload] = useState<PlayerPayload | null>(() =>
     readPayload(companyId, displayId),
   );
-  const [index, setIndex] = useState(() => readPlayback(companyId, displayId)?.itemIndex ?? 0);
+  const [initialPlayback] = useState(() => readPlayback(companyId, displayId));
+  const [index, setIndex] = useState(() => initialPlayback?.itemIndex ?? 0);
   const [playbackCycle, setPlaybackCycle] = useState(0);
   const [interruptions, setInterruptions] = useState<Interruption[]>([]);
   const [activeInterruption, setActiveInterruption] = useState<Interruption | null>(null);
@@ -449,10 +454,42 @@ export function TvPlayer({ companyId, displayId }: { companyId: string; displayI
       savedAt: new Date().toISOString(),
     });
     setIndex(nextIndex);
+    setPlaybackError(null);
     // Também força uma nova instância do player quando a playlist tem apenas
     // um vídeo e o índice continua sendo zero depois do evento ended.
     setPlaybackCycle((value) => value + 1);
   }, [companyId, displayId, nextIndex, nextItemId]);
+  const handleMediaError = useCallback(
+    (error: Error) => {
+      runtime.error(error);
+      setPlaybackError({
+        itemId: current?.id ?? '',
+        message: error.message,
+      });
+    },
+    [current?.id, runtime],
+  );
+  const handleVideoEvent = useCallback(
+    (event: string, video: HTMLVideoElement) => {
+      if (diagnosticMode)
+        runtime.lifecycle(
+          `video:${event} ready=${video.readyState} network=${video.networkState} time=${video.currentTime.toFixed(1)} muted=${video.muted}`,
+        );
+      if (event === 'playing') setPlaybackError(null);
+    },
+    [diagnosticMode, runtime],
+  );
+  const handleMediaEnded = useCallback(() => {
+    runtime.lifecycle(`vídeo finalizado: ${current?.media.title ?? current?.id ?? 'desconhecido'}`);
+    advanceToNext();
+  }, [advanceToNext, current?.id, current?.media.title, runtime]);
+
+  useEffect(() => {
+    if (!activated || !current || playbackError?.itemId !== current.id || items.length <= 1)
+      return;
+    const timer = runtime.timeout(advanceToNext, 2_500);
+    return () => runtime.clear(timer);
+  }, [activated, advanceToNext, current, items.length, playbackError?.itemId, runtime]);
 
   useDeploymentRefresh(() => {
     if (activeInterruption) return;
@@ -488,7 +525,7 @@ export function TvPlayer({ companyId, displayId }: { companyId: string; displayI
             // returns from the background. Resume the picture muted first.
             video.muted = true;
             try {
-              await playVideo(video);
+              await playVideoElement(video);
             } catch (error) {
               runtime.error(error);
               return;
@@ -584,7 +621,7 @@ export function TvPlayer({ companyId, displayId }: { companyId: string; displayI
       !activated ||
       current?.media.type !== 'video' ||
       !storageKey ||
-      storageKey.includes('/compatible/') ||
+      storageKey.includes('/compatible-v2/') ||
       normalizingVideos.current.has(current.media.id)
     )
       return;
@@ -645,27 +682,18 @@ export function TvPlayer({ companyId, displayId }: { companyId: string; displayI
       runtime.setPreloadCount(0);
       return;
     }
-    let media: HTMLImageElement | HTMLVideoElement;
+    // Um segundo elemento <video> disputa o decoder de hardware no Android
+    // WebView. Imagens podem ser pré-carregadas sem criar essa disputa.
     if (next.media.type === 'video') {
-      const video = document.createElement('video');
-      video.preload = 'metadata';
-      video.muted = true;
-      video.playsInline = true;
-      video.src = url;
-      media = video;
-    } else {
-      const image = new Image();
-      image.decoding = 'async';
-      image.src = url;
-      media = image;
+      runtime.setPreloadCount(0);
+      return;
     }
+    const media = new Image();
+    media.decoding = 'async';
+    media.src = url;
     runtime.setPreloadCount(1);
     return () => {
-      if (media instanceof HTMLVideoElement) {
-        media.pause();
-        media.removeAttribute('src');
-        media.load();
-      } else media.removeAttribute('src');
+      media.removeAttribute('src');
       runtime.setPreloadCount(0);
     };
   }, [next, runtime]);
@@ -693,8 +721,15 @@ export function TvPlayer({ companyId, displayId }: { companyId: string; displayI
         runtime.error(`Watchdog recuperando mídia travada: ${current.media.title ?? current.id}`);
         void load();
         if (video) {
-          video.load();
-          void video.play().catch(() => undefined);
+          const retryAt = video.ended ? 0 : Math.max(0, video.currentTime - 0.25);
+          video.pause();
+          video.muted = true;
+          try {
+            video.currentTime = retryAt;
+          } catch {
+            video.currentTime = 0;
+          }
+          void playVideoElement(video).catch((error) => runtime.error(error));
         } else advanceToNext();
         return;
       }
@@ -836,7 +871,7 @@ export function TvPlayer({ companyId, displayId }: { companyId: string; displayI
     if (video) {
       video.muted = true;
       try {
-        await playVideo(video);
+        await playVideoElement(video);
       } catch (error) {
         runtime.error(error);
       }
@@ -869,33 +904,32 @@ export function TvPlayer({ companyId, displayId }: { companyId: string; displayI
 
   return (
     <main className="tv-screen">
-      <Media
-        key={`${current.id}:${playbackCycle}`}
+      <TvMediaStage
         item={current}
-        displayId={displayId}
+        playbackRun={playbackCycle}
+        resumeSeconds={
+          playbackCycle === 0 && initialPlayback?.itemId === current.id
+            ? initialPlayback.elapsedSeconds
+            : 0
+        }
         videoRef={videoRef}
         soundEnabled={soundEnabled}
         audioActivated={activated}
-        playbackEnabled={activated}
-        onVideoEvent={(event, video) => {
-          if (diagnosticMode)
-            runtime.lifecycle(
-              `video:${event} ready=${video.readyState} network=${video.networkState} time=${video.currentTime.toFixed(1)} muted=${video.muted}`,
-            );
-        }}
-        onEnded={() => {
-          runtime.lifecycle(`vídeo finalizado: ${current.media.title ?? current.id}`);
-          advanceToNext();
-        }}
-        onError={(error) => {
-          runtime.error(error);
-          void load();
-        }}
+        playbackEnabled={activated && !activeInterruption}
+        onVideoEvent={handleVideoEvent}
+        onEnded={handleMediaEnded}
+        onError={handleMediaError}
       />
       {videoRecovery?.mediaId === current.media.id ? (
         <div className={`video-recovery${videoRecovery.failed ? ' failed' : ''}`} role="status">
           <strong>{videoRecovery.failed ? 'Vídeo indisponível' : 'Otimizando vídeo'}</strong>
           <span>{videoRecovery.message}</span>
+        </div>
+      ) : null}
+      {playbackError?.itemId === current.id ? (
+        <div className="video-recovery failed" role="alert">
+          <strong>Conteúdo indisponível</strong>
+          <span>{playbackError.message}</span>
         </div>
       ) : null}
       {activeInterruption ? <CallOverlay interruption={activeInterruption} /> : null}
@@ -1040,214 +1074,4 @@ function AudioDiagnostic({
       </span>
     </aside>
   );
-}
-
-function Media({
-  item,
-  displayId,
-  videoRef,
-  soundEnabled,
-  audioActivated,
-  playbackEnabled,
-  onVideoEvent,
-  onEnded,
-  onError,
-}: {
-  item: ProgramItem;
-  displayId: string;
-  videoRef: React.RefObject<HTMLVideoElement | null>;
-  soundEnabled: boolean;
-  audioActivated: boolean;
-  playbackEnabled: boolean;
-  onVideoEvent: (event: string, video: HTMLVideoElement) => void;
-  onEnded: () => void;
-  onError: (error: Error) => void;
-}) {
-  const url = resolveMediaUrl(item.media);
-  const saved = readPlayback(item.companyId, displayId);
-  const attachedVideo = useRef<HTMLVideoElement | null>(null);
-  const playbackStarted = useRef(false);
-  const playbackPositionRestored = useRef(false);
-  const attachVideo = useCallback(
-    (video: HTMLVideoElement | null) => {
-      const previous = attachedVideo.current;
-      if (previous && previous !== video) tvAudioService.releaseMedia(previous);
-      attachedVideo.current = video;
-      videoRef.current = video;
-    },
-    [videoRef],
-  );
-  useEffect(
-    () => () => {
-      if (attachedVideo.current) tvAudioService.releaseMedia(attachedVideo.current);
-      videoRef.current = null;
-    },
-    [videoRef],
-  );
-  const restoreAndPlay = useCallback(async () => {
-    const video = videoRef.current;
-    if (!video || !playbackEnabled) return;
-    if (
-      !playbackPositionRestored.current &&
-      video.readyState >= 1 &&
-      Number.isFinite(video.duration)
-    ) {
-      playbackPositionRestored.current = true;
-      try {
-        const savedSecond =
-          saved?.itemId === item.id && Number.isFinite(saved.elapsedSeconds)
-            ? Math.max(0, saved.elapsedSeconds)
-            : 0;
-        // Um snapshot no último segundo representa uma execução concluída e
-        // deve reiniciar, nunca reaparecer como um quadro preto no fim.
-        const targetSecond = video.duration - savedSecond > 1 ? savedSecond : 0;
-        video.currentTime = Math.min(targetSecond, Math.max(0, video.duration - 0.25));
-      } catch {
-        /* Some older browsers only accept currentTime after canplay. */
-      }
-    }
-    if (playbackStarted.current && !video.paused) return;
-    video.volume = item.volume;
-    // Always start the visual track muted. Amazon Silk can reject the whole
-    // play() request when sound is enabled, even after a previous unlock.
-    video.muted = true;
-    try {
-      await playVideo(video);
-      playbackStarted.current = true;
-    } catch {
-      onError(mediaPlaybackError(video, item));
-      return;
-    }
-    if (audioActivated && soundEnabled && !item.muted && !item.soundtrack?.muteOriginalAudio) {
-      video.muted = false;
-      try {
-        await tvAudioService.playMediaAudio(video, item.volume);
-      } catch {
-        // Keep the picture running if audible playback is blocked.
-        video.muted = true;
-        if (video.paused) void playVideo(video).catch(() => undefined);
-      }
-    }
-  }, [audioActivated, item, onError, playbackEnabled, saved, soundEnabled, videoRef]);
-
-  useEffect(() => {
-    if (playbackEnabled) void restoreAndPlay();
-  }, [playbackEnabled, restoreAndPlay]);
-
-  useEffect(() => {
-    const video = videoRef.current;
-    if (!video || item.media.type !== 'video') return;
-    const audible =
-      audioActivated && soundEnabled && !item.muted && !item.soundtrack?.muteOriginalAudio;
-    if (!audible) {
-      video.muted = true;
-      return;
-    }
-    video.muted = false;
-    void tvAudioService.playMediaAudio(video, item.volume).catch(() => {
-      video.muted = true;
-      if (video.paused) void playVideo(video).catch(() => undefined);
-    });
-  }, [audioActivated, item, soundEnabled, videoRef]);
-  return (
-    <div
-      className={`media-layer ${item.media.type === 'video' ? 'media-layer-video' : ''}`}
-      style={{ '--media-fit': item.fit } as React.CSSProperties}
-    >
-      {item.media.type === 'video' && url ? (
-        <video
-          key={url}
-          className="tv-video"
-          ref={attachVideo}
-          src={url}
-          preload="auto"
-          muted
-          controls={false}
-          disablePictureInPicture
-          onLoadedMetadata={(event) => {
-            onVideoEvent('loadedmetadata', event.currentTarget);
-            void restoreAndPlay();
-          }}
-          onLoadedData={(event) => {
-            onVideoEvent('loadeddata', event.currentTarget);
-            void restoreAndPlay();
-          }}
-          onCanPlay={(event) => {
-            onVideoEvent('canplay', event.currentTarget);
-            void restoreAndPlay();
-          }}
-          onPlaying={(event) => onVideoEvent('playing', event.currentTarget)}
-          onWaiting={(event) => onVideoEvent('waiting', event.currentTarget)}
-          onStalled={(event) => onVideoEvent('stalled', event.currentTarget)}
-          onEnded={(event) => {
-            const video = event.currentTarget;
-            try {
-              video.pause();
-              video.currentTime = 0;
-              video.load();
-            } catch {
-              /* Some TV browsers reject resets immediately after ended. */
-            }
-            onEnded();
-          }}
-          onError={(event) => onError(mediaPlaybackError(event.currentTarget, item))}
-          playsInline
-        />
-      ) : null}
-      {item.media.type === 'image' && url ? (
-        <>
-          {item.fit === 'blur_background' ? (
-            <img className="media-blurred-background" src={url} alt="" aria-hidden="true" />
-          ) : null}
-          <img
-            className={`media-main-image ${item.fit === 'blur_background' ? 'media-main-image-centered' : ''} image-motion image-motion-${item.media.animation ?? 'none'}`}
-            style={
-              {
-                '--motion-duration': `${item.durationSeconds}s`,
-              } as React.CSSProperties
-            }
-            src={url}
-            alt={item.media.title ?? ''}
-            onError={() =>
-              onError(new Error(`Falha ao carregar imagem: ${item.media.title ?? item.id}`))
-            }
-          />
-        </>
-      ) : null}
-      {item.media.type === 'message' ? (
-        <div className="message-content">{item.media.title}</div>
-      ) : null}
-      {item.overlayText ? (
-        <div className={`media-caption caption-${item.overlayAnimation ?? 'none'}`}>
-          {item.overlayText}
-        </div>
-      ) : null}
-      {item.qrCodeUrl ? (
-        <div className="qr-overlay">
-          <QRCodeSVG value={item.qrCodeUrl} size={128} />
-          <small>Aponte a câmera</small>
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
-async function playVideo(video: HTMLVideoElement) {
-  const result = video.play();
-  if (result && typeof result.then === 'function') await result;
-}
-
-function mediaPlaybackError(video: HTMLVideoElement, item: ProgramItem) {
-  const code = video.error?.code;
-  const reason =
-    code === 4
-      ? 'formato incompatível (use MP4 com vídeo H.264 e áudio AAC)'
-      : code === 3
-        ? 'o navegador não conseguiu decodificar o arquivo'
-        : code === 2
-          ? 'falha de rede ao baixar o arquivo'
-          : code === 1
-            ? 'reprodução interrompida'
-            : 'reprodução bloqueada pelo navegador';
-  return new Error(`Falha no vídeo ${item.media.title ?? item.id}: ${reason}.`);
 }

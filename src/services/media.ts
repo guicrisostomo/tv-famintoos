@@ -12,3 +12,8 @@ export function isPlayableMedia(media: TvMedia): boolean {
   if (media.type === 'qr_code') return Boolean(media.mediaUrl?.trim() || media.publicUrl?.trim())
   return Boolean(resolveMediaUrl(media))
 }
+
+export async function playVideoElement(video: HTMLVideoElement) {
+  const result = video.play()
+  if (result && typeof result.then === 'function') await result
+}
