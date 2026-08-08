@@ -1,56 +1,35 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { QRCodeSVG } from "qrcode.react";
-import type { Interruption, PlayerPayload, ProgramItem } from "../domain/tv";
-import { isPlayableMedia, resolveMediaUrl } from "../services/media";
-import {
-  readPayload,
-  readPlayback,
-  savePayload,
-  savePlayback,
-} from "../services/playerCache";
-import { selectNextInterruption } from "../services/playerQueue";
-import { supabase } from "../services/supabase";
-import type { TvPlaylistRecord } from "../hooks/useTvData";
-import { useDeploymentRefresh } from "../hooks/useDeploymentRefresh";
-import { normalizeTvVideo } from "../services/storage";
-import {
-  tvAudioService,
-  type TvAudioDiagnostics,
-} from "../services/tvAudioService";
+import { QRCodeSVG } from 'qrcode.react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import type { Interruption, PlayerPayload, ProgramItem } from '../domain/tv';
+import { useDeploymentRefresh } from '../hooks/useDeploymentRefresh';
+import type { TvPlaylistRecord } from '../hooks/useTvData';
+import { isPlayableMedia, resolveMediaUrl } from '../services/media';
+import { readPayload, readPlayback, savePayload, savePlayback } from '../services/playerCache';
+import { selectNextInterruption } from '../services/playerQueue';
 import {
   defaultCallSpeechSettings,
   speechService,
   type CallSpeechSettings,
-} from "../services/speechService";
-import {
-  TvPlayerRuntime,
-  type TvPlayerDiagnostics,
-} from "../services/tvPlayerRuntime";
+} from '../services/speechService';
+import { normalizeTvVideo } from '../services/storage';
+import { supabase } from '../services/supabase';
+import { tvAudioService, type TvAudioDiagnostics } from '../services/tvAudioService';
+import { TvPlayerRuntime, type TvPlayerDiagnostics } from '../services/tvPlayerRuntime';
 
-const activationKey = (displayId: string) =>
-  `famintoos-tv:activated:${displayId}`;
-const processedCallsKey = (displayId: string) =>
-  `famintoos-tv:processed-calls:${displayId}`;
+const activationKey = (displayId: string) => `famintoos-tv:activated:${displayId}`;
+const processedCallsKey = (displayId: string) => `famintoos-tv:processed-calls:${displayId}`;
 
 function readProcessedCalls(displayId: string) {
   try {
     return new Set<string>(
-      JSON.parse(
-        window.localStorage.getItem(processedCallsKey(displayId)) ?? "[]",
-      ) as string[],
+      JSON.parse(window.localStorage.getItem(processedCallsKey(displayId)) ?? '[]') as string[],
     );
   } catch {
     return new Set<string>();
   }
 }
 
-export function TvPlayer({
-  companyId,
-  displayId,
-}: {
-  companyId: string;
-  displayId: string;
-}) {
+export function TvPlayer({ companyId, displayId }: { companyId: string; displayId: string }) {
   const [activated, setActivated] = useState(false);
   const [activating, setActivating] = useState(false);
   const [activationError, setActivationError] = useState<string | null>(null);
@@ -60,26 +39,22 @@ export function TvPlayer({
     failed?: boolean;
   } | null>(null);
   const [soundEnabled, setSoundEnabled] = useState(true);
-  const [callSettings, setCallSettings] = useState<CallSpeechSettings>(
-    defaultCallSpeechSettings,
-  );
-  const [businessName, setBusinessName] = useState("");
-  const [audioDiagnostics, setAudioDiagnostics] = useState<TvAudioDiagnostics>(
-    () => tvAudioService.diagnostics(),
+  const [callSettings, setCallSettings] = useState<CallSpeechSettings>(defaultCallSpeechSettings);
+  const [businessName, setBusinessName] = useState('');
+  const [audioDiagnostics, setAudioDiagnostics] = useState<TvAudioDiagnostics>(() =>
+    tvAudioService.diagnostics(),
   );
   const [runtime] = useState(() => new TvPlayerRuntime(companyId, displayId));
-  const [playerDiagnostics, setPlayerDiagnostics] =
-    useState<TvPlayerDiagnostics>(() => runtime.snapshot());
+  const [playerDiagnostics, setPlayerDiagnostics] = useState<TvPlayerDiagnostics>(() =>
+    runtime.snapshot(),
+  );
   const [payload, setPayload] = useState<PlayerPayload | null>(() =>
     readPayload(companyId, displayId),
   );
-  const [index, setIndex] = useState(
-    () => readPlayback(companyId, displayId)?.itemIndex ?? 0,
-  );
+  const [index, setIndex] = useState(() => readPlayback(companyId, displayId)?.itemIndex ?? 0);
   const [playbackCycle, setPlaybackCycle] = useState(0);
   const [interruptions, setInterruptions] = useState<Interruption[]>([]);
-  const [activeInterruption, setActiveInterruption] =
-    useState<Interruption | null>(null);
+  const [activeInterruption, setActiveInterruption] = useState<Interruption | null>(null);
   const processedCalls = useRef(readProcessedCalls(displayId));
   const normalizingVideos = useRef(new Set<string>());
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -89,43 +64,42 @@ export function TvPlayer({
   const reconnectRef = useRef<() => void>(() => undefined);
   const disconnectRef = useRef<() => void>(() => undefined);
   const progressRef = useRef({
-    itemId: "",
+    itemId: '',
     value: 0,
     changedAt: 0,
     recoveries: 0,
   });
-  const diagnosticMode = ["audio", "player"].includes(
-    new URLSearchParams(window.location.search).get("diagnostic") ?? "",
+  const diagnosticMode = ['audio', 'player'].includes(
+    new URLSearchParams(window.location.search).get('diagnostic') ?? '',
   );
 
   useEffect(() => {
     const root = document.documentElement;
     const userAgent = navigator.userAgent.toLowerCase();
-    const isFullyKiosk =
-      userAgent.includes("fully") || "fully" in window;
+    const isFullyKiosk = userAgent.includes('fully') || 'fully' in window;
     const updateViewport = () => {
       const viewport = window.visualViewport;
       root.style.setProperty(
-        "--tv-viewport-width",
+        '--tv-viewport-width',
         `${Math.round(viewport?.width ?? window.innerWidth)}px`,
       );
       root.style.setProperty(
-        "--tv-viewport-height",
+        '--tv-viewport-height',
         `${Math.round(viewport?.height ?? window.innerHeight)}px`,
       );
     };
-    root.classList.toggle("fully-kiosk", isFullyKiosk);
+    root.classList.toggle('fully-kiosk', isFullyKiosk);
     updateViewport();
-    window.addEventListener("resize", updateViewport);
-    window.addEventListener("orientationchange", updateViewport);
-    window.visualViewport?.addEventListener("resize", updateViewport);
+    window.addEventListener('resize', updateViewport);
+    window.addEventListener('orientationchange', updateViewport);
+    window.visualViewport?.addEventListener('resize', updateViewport);
     return () => {
-      root.classList.remove("fully-kiosk");
-      root.style.removeProperty("--tv-viewport-width");
-      root.style.removeProperty("--tv-viewport-height");
-      window.removeEventListener("resize", updateViewport);
-      window.removeEventListener("orientationchange", updateViewport);
-      window.visualViewport?.removeEventListener("resize", updateViewport);
+      root.classList.remove('fully-kiosk');
+      root.style.removeProperty('--tv-viewport-width');
+      root.style.removeProperty('--tv-viewport-height');
+      window.removeEventListener('resize', updateViewport);
+      window.removeEventListener('orientationchange', updateViewport);
+      window.visualViewport?.removeEventListener('resize', updateViewport);
     };
   }, []);
 
@@ -160,51 +134,45 @@ export function TvPlayer({
         templateResult,
         businessResult,
       ] = await Promise.all([
-        supabase.rpc("get_tv_player_payload", {
+        supabase.rpc('get_tv_player_payload', {
           p_company_id: companyId,
           p_display_id: displayId,
         }),
         supabase
-          .from("tv_playlist_items")
+          .from('tv_playlist_items')
           .select(
-            "id,display_id,media_id,position,is_active,image_fit,caption_text,caption_animation,sound_media_id,sound_volume,sound_loop,mute_original_audio,media:tv_media!tv_playlist_items_media_id_fkey(id,title,media_type,media_url,message_text,duration_seconds,public_url,storage_provider,storage_key,animation,starts_at,ends_at,weekdays,start_time,end_time),sound_media:tv_media!tv_playlist_items_sound_media_id_fkey(id,title,media_type,media_url,message_text,duration_seconds,public_url,storage_provider,animation)",
+            'id,display_id,media_id,position,is_active,image_fit,caption_text,caption_animation,sound_media_id,sound_volume,sound_loop,mute_original_audio,media:tv_media!tv_playlist_items_media_id_fkey(id,title,media_type,media_url,message_text,duration_seconds,public_url,storage_provider,storage_key,animation,starts_at,ends_at,weekdays,start_time,end_time),sound_media:tv_media!tv_playlist_items_sound_media_id_fkey(id,title,media_type,media_url,message_text,duration_seconds,public_url,storage_provider,animation)',
           )
-          .eq("company_id", companyId)
-          .eq("display_id", displayId)
-          .eq("is_active", true)
-          .order("position"),
+          .eq('company_id', companyId)
+          .eq('display_id', displayId)
+          .eq('is_active', true)
+          .order('position'),
         supabase
-          .from("tv_calls")
+          .from('tv_calls')
           .select(
-            "id,company_id,display_id,customer_name,order_id,call_text,call_payload,requested_at",
+            'id,company_id,display_id,customer_name,order_id,call_text,call_payload,requested_at',
           )
-          .eq("company_id", companyId)
-          .eq("display_id", displayId)
-          .eq("status", "pending")
-          .order("requested_at"),
+          .eq('company_id', companyId)
+          .eq('display_id', displayId)
+          .eq('status', 'pending')
+          .order('requested_at'),
         supabase
-          .from("tv_displays")
-          .select("sound_enabled")
-          .eq("company_id", companyId)
-          .eq("id", displayId)
+          .from('tv_displays')
+          .select('sound_enabled')
+          .eq('company_id', companyId)
+          .eq('id', displayId)
           .single(),
         supabase
-          .from("tv_call_templates")
-          .select("primary_text,volume,duration_seconds,repetitions,layout")
-          .eq("company_id", companyId)
-          .eq("active", true)
+          .from('tv_call_templates')
+          .select('primary_text,volume,duration_seconds,repetitions,layout')
+          .eq('company_id', companyId)
+          .eq('active', true)
           .limit(1)
           .maybeSingle(),
-        supabase
-          .from("business")
-          .select("name")
-          .eq("cnpj", companyId)
-          .maybeSingle(),
+        supabase.from('business').select('name').eq('cnpj', companyId).maybeSingle(),
       ]);
       if (programResult.error && playlistResult.error && callsResult.error) {
-        runtime.error(
-          programResult.error ?? playlistResult.error ?? callsResult.error,
-        );
+        runtime.error(programResult.error ?? playlistResult.error ?? callsResult.error);
         return;
       }
       const programPayload = programResult.data as PlayerPayload | null;
@@ -213,21 +181,17 @@ export function TvPlayer({
         ? {
             ...defaultCallSpeechSettings,
             ...(templateResult.data.layout as Partial<CallSpeechSettings>),
-            template:
-              templateResult.data.primary_text ||
-              defaultCallSpeechSettings.template,
+            template: templateResult.data.primary_text || defaultCallSpeechSettings.template,
             volume: Number(templateResult.data.volume),
             durationSeconds: templateResult.data.duration_seconds,
             repetitions: templateResult.data.repetitions,
           }
         : defaultCallSpeechSettings;
       setCallSettings(nextCallSettings);
-      setBusinessName(businessResult.data?.name ?? "");
+      setBusinessName(businessResult.data?.name ?? '');
       setSoundEnabled(nextSoundEnabled);
       tvAudioService.setEnabled(nextSoundEnabled);
-      const legacyItems = (
-        (playlistResult.data ?? []) as unknown as TvPlaylistRecord[]
-      )
+      const legacyItems = ((playlistResult.data ?? []) as unknown as TvPlaylistRecord[])
         .filter((item) => isScheduledNow(item.media))
         .map((item) => ({
           id: item.id,
@@ -236,11 +200,21 @@ export function TvPlayer({
           durationSeconds: item.media.duration_seconds ?? 10,
           volume: 1,
           muted: !nextSoundEnabled,
-          fit: item.image_fit ?? "contain",
+          fit: item.image_fit ?? 'contain',
           overlayText: item.caption_text,
-          overlayAnimation: item.caption_animation ?? "none",
-          soundtrack: item.sound_media && (item.sound_media.public_url || item.sound_media.media_url) ? { id: item.sound_media.id, title: item.sound_media.title, url: item.sound_media.public_url ?? item.sound_media.media_url!, volume: item.sound_volume ?? .7, loop: item.sound_loop ?? true, muteOriginalAudio: item.mute_original_audio ?? false } : null,
-          resumeBehavior: "resume" as const,
+          overlayAnimation: item.caption_animation ?? 'none',
+          soundtrack:
+            item.sound_media && (item.sound_media.public_url || item.sound_media.media_url)
+              ? {
+                  id: item.sound_media.id,
+                  title: item.sound_media.title,
+                  url: item.sound_media.public_url ?? item.sound_media.media_url!,
+                  volume: item.sound_volume ?? 0.7,
+                  loop: item.sound_loop ?? true,
+                  muteOriginalAudio: item.mute_original_audio ?? false,
+                }
+              : null,
+          resumeBehavior: 'resume' as const,
           active: item.is_active,
           media: {
             id: item.media.id,
@@ -249,21 +223,19 @@ export function TvPlayer({
             mediaUrl: item.media.media_url,
             publicUrl: item.media.public_url,
             storageProvider: item.media.storage_provider as
-              "cloudflare_r2" | "supabase_storage" | "external_url" | null,
+              | 'cloudflare_r2'
+              | 'supabase_storage'
+              | 'external_url'
+              | null,
             storageKey: item.media.storage_key,
-            animation: item.media.animation ?? "none",
-            title:
-              item.media.media_type === "message"
-                ? item.media.message_text
-                : item.media.title,
+            animation: item.media.animation ?? 'none',
+            title: item.media.media_type === 'message' ? item.media.message_text : item.media.title,
           },
         }));
       const known = new Set(legacyItems.map((item) => item.id));
-      const programItems = (programPayload?.items ?? []).filter(
-        (item) => !known.has(item.id),
-      );
+      const programItems = (programPayload?.items ?? []).filter((item) => !known.has(item.id));
       const programInterruptions = (programPayload?.interruptions ?? []).filter(
-        (interruption) => interruption.kind !== "call",
+        (interruption) => interruption.kind !== 'call',
       );
       const pendingCalls: Interruption[] = (callsResult.data ?? [])
         .filter((call) => !processedCalls.current.has(call.id))
@@ -271,20 +243,20 @@ export function TvPlayer({
           id: call.id,
           companyId: call.company_id,
           displayId: call.display_id,
-          kind: "call",
+          kind: 'call',
           priority: 1000,
           requestedAt: call.requested_at,
           durationSeconds: nextCallSettings.durationSeconds,
           title: call.call_text,
           subtitle: call.customer_name,
           callValues: {
-            ...((call.call_payload ?? {}) as Interruption["callValues"]),
+            ...((call.call_payload ?? {}) as Interruption['callValues']),
             customer_name: call.customer_name,
             order_number:
-              ((call.call_payload ?? {}) as Interruption["callValues"])
-                ?.order_number ?? call.order_id,
+              ((call.call_payload ?? {}) as Interruption['callValues'])?.order_number ??
+              call.order_id,
             call_text: call.call_text,
-            business_name: businessResult.data?.name ?? "",
+            business_name: businessResult.data?.name ?? '',
           },
         }));
       const next: PlayerPayload = {
@@ -342,86 +314,86 @@ export function TvPlayer({
       channel = null;
       runtime.setSubscriptions(0);
       if (previous) await client.removeChannel(previous);
-      if (disposed || document.visibilityState === "hidden") return;
+      if (disposed || document.visibilityState === 'hidden') return;
       const nextChannel = client
         .channel(`tv:${companyId}:${displayId}:stable`)
         .on(
-          "postgres_changes",
+          'postgres_changes',
           {
-            event: "*",
-            schema: "public",
-            table: "tv_programs",
+            event: '*',
+            schema: 'public',
+            table: 'tv_programs',
             filter: `company_id=eq.${companyId}`,
           },
           () => void load(),
         )
         .on(
-          "postgres_changes",
+          'postgres_changes',
           {
-            event: "INSERT",
-            schema: "public",
-            table: "tv_playlist_items",
+            event: 'INSERT',
+            schema: 'public',
+            table: 'tv_playlist_items',
             filter: `display_id=eq.${displayId}`,
           },
           () => void load(),
         )
         .on(
-          "postgres_changes",
+          'postgres_changes',
           {
-            event: "UPDATE",
-            schema: "public",
-            table: "tv_playlist_items",
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'tv_playlist_items',
             filter: `display_id=eq.${displayId}`,
           },
           () => void load(),
         )
         .on(
-          "postgres_changes",
+          'postgres_changes',
           {
             // Supabase does not support filters on DELETE events. The reload
             // itself remains scoped to this company and display.
-            event: "DELETE",
-            schema: "public",
-            table: "tv_playlist_items",
+            event: 'DELETE',
+            schema: 'public',
+            table: 'tv_playlist_items',
           },
           () => void load(),
         )
         .on(
-          "postgres_changes",
+          'postgres_changes',
           {
-            event: "*",
-            schema: "public",
-            table: "tv_media",
+            event: '*',
+            schema: 'public',
+            table: 'tv_media',
             filter: `company_id=eq.${companyId}`,
           },
           () => void load(),
         )
         .on(
-          "postgres_changes",
+          'postgres_changes',
           {
-            event: "UPDATE",
-            schema: "public",
-            table: "tv_displays",
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'tv_displays',
             filter: `id=eq.${displayId}`,
           },
           () => void load(),
         )
         .on(
-          "postgres_changes",
+          'postgres_changes',
           {
-            event: "INSERT",
-            schema: "public",
-            table: "tv_interruptions",
+            event: 'INSERT',
+            schema: 'public',
+            table: 'tv_interruptions',
             filter: `display_id=eq.${displayId}`,
           },
           () => void load(),
         )
         .on(
-          "postgres_changes",
+          'postgres_changes',
           {
-            event: "INSERT",
-            schema: "public",
-            table: "tv_calls",
+            event: 'INSERT',
+            schema: 'public',
+            table: 'tv_calls',
             filter: `display_id=eq.${displayId}`,
           },
           () => void load(),
@@ -429,18 +401,14 @@ export function TvPlayer({
       channel = nextChannel;
       nextChannel.subscribe((status, error) => {
         if (disposed || channel !== nextChannel) return;
-        if (status === "SUBSCRIBED") {
+        if (status === 'SUBSCRIBED') {
           attempts = 0;
           runtime.setSubscriptions(1);
           runtime.reconnected();
           void load();
           return;
         }
-        if (
-          status === "CHANNEL_ERROR" ||
-          status === "TIMED_OUT" ||
-          status === "CLOSED"
-        ) {
+        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
           runtime.setSubscriptions(0);
           runtime.error(error ?? new Error(`Realtime: ${status}`));
           scheduleReconnect();
@@ -472,7 +440,7 @@ export function TvPlayer({
   const current = items[index % Math.max(items.length, 1)];
   const next = items.length > 1 ? items[(index + 1) % items.length] : null;
   const nextIndex = items.length ? (index + 1) % items.length : 0;
-  const nextItemId = items[nextIndex]?.id ?? "";
+  const nextItemId = items[nextIndex]?.id ?? '';
   const advanceToNext = useCallback(() => {
     savePlayback(companyId, displayId, {
       itemId: nextItemId,
@@ -489,34 +457,31 @@ export function TvPlayer({
   useDeploymentRefresh(() => {
     if (activeInterruption) return;
     savePlayback(companyId, displayId, {
-      itemId: current?.id ?? "",
+      itemId: current?.id ?? '',
       itemIndex: index,
       elapsedSeconds: videoRef.current?.currentTime ?? 0,
       savedAt: new Date().toISOString(),
     });
-    if (activated) window.sessionStorage.setItem(activationKey(displayId), "1");
-    runtime.controlledReload("Nova versão do site detectada");
+    if (activated) window.sessionStorage.setItem(activationKey(displayId), '1');
+    runtime.controlledReload('Nova versão do site detectada');
   }, runtime);
 
   useEffect(() => {
     const persist = () =>
       savePlayback(companyId, displayId, {
-        itemId: current?.id ?? "",
+        itemId: current?.id ?? '',
         itemIndex: index,
         elapsedSeconds: videoRef.current?.currentTime ?? 0,
         savedAt: new Date().toISOString(),
       });
     const recover = () => {
-      runtime.lifecycle("foreground");
-      if (supabase)
-        void supabase.auth
-          .refreshSession()
-          .catch((error) => runtime.error(error));
+      runtime.lifecycle('foreground');
+      if (supabase) void supabase.auth.refreshSession().catch((error) => runtime.error(error));
       reconnectRef.current();
       void load();
       void tvAudioService.resumeAudioContext();
       const video = videoRef.current;
-      if (activated && video && current?.media.type === "video") {
+      if (activated && video && current?.media.type === 'video') {
         void (async () => {
           if (video.paused) {
             // Fully/Android WebView may revoke audible autoplay after the app
@@ -539,39 +504,39 @@ export function TvPlayer({
       }
     };
     const hide = () => {
-      runtime.lifecycle("background");
+      runtime.lifecycle('background');
       persist();
       tvAudioService.pauseAllAudio();
     };
     const visibility = () => {
-      if (document.visibilityState === "hidden") {
+      if (document.visibilityState === 'hidden') {
         hide();
         disconnectRef.current();
       } else recover();
     };
     const pageHide = () => {
-      runtime.lifecycle("pagehide");
+      runtime.lifecycle('pagehide');
       hide();
       disconnectRef.current();
     };
     const blur = () => {
-      runtime.lifecycle("blur");
+      runtime.lifecycle('blur');
       // Fully Kiosk may emit blur while requesting fullscreen. Persist state,
       // but keep the visual track running; the audio service mutes it.
       persist();
     };
     const offline = () => {
-      runtime.lifecycle("offline");
-      runtime.error("Conexão de rede indisponível.");
+      runtime.lifecycle('offline');
+      runtime.error('Conexão de rede indisponível.');
       disconnectRef.current();
     };
-    window.addEventListener("pageshow", recover);
-    window.addEventListener("pagehide", pageHide);
-    window.addEventListener("focus", recover);
-    window.addEventListener("blur", blur);
-    window.addEventListener("online", recover);
-    window.addEventListener("offline", offline);
-    document.addEventListener("visibilitychange", visibility);
+    window.addEventListener('pageshow', recover);
+    window.addEventListener('pagehide', pageHide);
+    window.addEventListener('focus', recover);
+    window.addEventListener('blur', blur);
+    window.addEventListener('online', recover);
+    window.addEventListener('offline', offline);
+    document.addEventListener('visibilitychange', visibility);
     const persistTimer = runtime.interval(persist, 5_000);
     const refreshTimer = runtime.interval(() => {
       if (!document.hidden) void load();
@@ -580,13 +545,13 @@ export function TvPlayer({
       persist();
       runtime.clear(persistTimer);
       runtime.clear(refreshTimer);
-      window.removeEventListener("pageshow", recover);
-      window.removeEventListener("pagehide", pageHide);
-      window.removeEventListener("focus", recover);
-      window.removeEventListener("blur", blur);
-      window.removeEventListener("online", recover);
-      window.removeEventListener("offline", offline);
-      document.removeEventListener("visibilitychange", visibility);
+      window.removeEventListener('pageshow', recover);
+      window.removeEventListener('pagehide', pageHide);
+      window.removeEventListener('focus', recover);
+      window.removeEventListener('blur', blur);
+      window.removeEventListener('online', recover);
+      window.removeEventListener('offline', offline);
+      document.removeEventListener('visibilitychange', visibility);
     };
   }, [
     activated,
@@ -606,7 +571,7 @@ export function TvPlayer({
   useEffect(() => {
     runtime.media(current?.media.title);
     progressRef.current = {
-      itemId: current?.id ?? "",
+      itemId: current?.id ?? '',
       value: videoRef.current?.currentTime ?? index,
       changedAt: Date.now(),
       recoveries: 0,
@@ -615,11 +580,18 @@ export function TvPlayer({
 
   useEffect(() => {
     const storageKey = current?.media.storageKey;
-    if (!activated || current?.media.type !== "video" || !storageKey || storageKey.includes("/compatible/") || normalizingVideos.current.has(current.media.id)) return;
+    if (
+      !activated ||
+      current?.media.type !== 'video' ||
+      !storageKey ||
+      storageKey.includes('/compatible/') ||
+      normalizingVideos.current.has(current.media.id)
+    )
+      return;
     normalizingVideos.current.add(current.media.id);
     setVideoRecovery({
       mediaId: current.media.id,
-      message: "Preparando o vídeo para esta TV...",
+      message: 'Preparando o vídeo para esta TV...',
     });
     runtime.lifecycle(`otimizando vídeo incompatível: ${current.media.title ?? current.media.id}`);
     const timer = runtime.timeout(() => {
@@ -630,25 +602,36 @@ export function TvPlayer({
           runtime.lifecycle(`vídeo otimizado: ${current.media.title ?? current.media.id}`);
           return loadRef.current();
         })
-        .catch(error => {
+        .catch((error) => {
           normalizingVideos.current.delete(current.media.id);
           setVideoRecovery({
             mediaId: current.media.id,
-            message: "Não foi possível preparar este vídeo. Verifique a conexão e tente novamente.",
+            message: 'Não foi possível preparar este vídeo. Verifique a conexão e tente novamente.',
             failed: true,
           });
           runtime.error(error);
         });
     }, 800);
     return () => runtime.clear(timer);
-  }, [activated, advanceToNext, current?.media.id, current?.media.storageKey, current?.media.title, current?.media.type, items.length, runtime]);
+  }, [
+    activated,
+    advanceToNext,
+    current?.media.id,
+    current?.media.storageKey,
+    current?.media.title,
+    current?.media.type,
+    items.length,
+    runtime,
+  ]);
 
   useEffect(() => {
     if (!activated || activeInterruption || !soundEnabled || !current?.soundtrack) {
       tvAudioService.stopSoundtrack();
       return;
     }
-    void tvAudioService.playSoundtrack(current.soundtrack.url, current.soundtrack.volume, current.soundtrack.loop).catch(error => runtime.error(error));
+    void tvAudioService
+      .playSoundtrack(current.soundtrack.url, current.soundtrack.volume, current.soundtrack.loop)
+      .catch((error) => runtime.error(error));
     return () => tvAudioService.stopSoundtrack();
   }, [activated, activeInterruption, current?.id, current?.soundtrack, runtime, soundEnabled]);
 
@@ -663,16 +646,16 @@ export function TvPlayer({
       return;
     }
     let media: HTMLImageElement | HTMLVideoElement;
-    if (next.media.type === "video") {
-      const video = document.createElement("video");
-      video.preload = "metadata";
+    if (next.media.type === 'video') {
+      const video = document.createElement('video');
+      video.preload = 'metadata';
       video.muted = true;
       video.playsInline = true;
       video.src = url;
       media = video;
     } else {
       const image = new Image();
-      image.decoding = "async";
+      image.decoding = 'async';
       image.src = url;
       media = image;
     }
@@ -680,9 +663,9 @@ export function TvPlayer({
     return () => {
       if (media instanceof HTMLVideoElement) {
         media.pause();
-        media.removeAttribute("src");
+        media.removeAttribute('src');
         media.load();
-      } else media.removeAttribute("src");
+      } else media.removeAttribute('src');
       runtime.setPreloadCount(0);
     };
   }, [next, runtime]);
@@ -691,13 +674,9 @@ export function TvPlayer({
     const watchdog = runtime.interval(() => {
       if (document.hidden || activeInterruption || !current) return;
       const video = videoRef.current;
-      const value =
-        video && current.media.type === "video" ? video.currentTime : index;
+      const value = video && current.media.type === 'video' ? video.currentTime : index;
       const progress = progressRef.current;
-      if (
-        progress.itemId !== current.id ||
-        Math.abs(value - progress.value) > 0.2
-      ) {
+      if (progress.itemId !== current.id || Math.abs(value - progress.value) > 0.2) {
         progressRef.current = {
           itemId: current.id,
           value,
@@ -706,17 +685,12 @@ export function TvPlayer({
         };
         return;
       }
-      const limit =
-        current.media.type === "video"
-          ? 45_000
-          : (current.durationSeconds + 30) * 1000;
+      const limit = current.media.type === 'video' ? 45_000 : (current.durationSeconds + 30) * 1000;
       if (Date.now() - progress.changedAt < limit) return;
       if (progress.recoveries < 2) {
         progress.recoveries += 1;
         progress.changedAt = Date.now();
-        runtime.error(
-          `Watchdog recuperando mídia travada: ${current.media.title ?? current.id}`,
-        );
+        runtime.error(`Watchdog recuperando mídia travada: ${current.media.title ?? current.id}`);
         void load();
         if (video) {
           video.load();
@@ -730,9 +704,7 @@ export function TvPlayer({
         elapsedSeconds: video?.currentTime ?? 0,
         savedAt: new Date().toISOString(),
       });
-      runtime.controlledReload(
-        "Watchdog: player sem progresso após duas recuperações",
-      );
+      runtime.controlledReload('Watchdog: player sem progresso após duas recuperações');
     }, 15_000);
     return () => runtime.clear(watchdog);
   }, [
@@ -753,21 +725,21 @@ export function TvPlayer({
     if (!next) return;
     const startTimer = runtime.timeout(() => {
       savePlayback(companyId, displayId, {
-        itemId: current?.id ?? "",
+        itemId: current?.id ?? '',
         itemIndex: index,
         elapsedSeconds: videoRef.current?.currentTime ?? 0,
         savedAt: new Date().toISOString(),
       });
       tvAudioService.pauseAllAudio();
       setActiveInterruption(next);
-      if (next.kind === "call") {
+      if (next.kind === 'call') {
         processedCalls.current.add(next.id);
         window.localStorage.setItem(
           processedCallsKey(displayId),
           JSON.stringify(Array.from(processedCalls.current).slice(-200)),
         );
         void updateCall(next.id, companyId, {
-          status: "showing",
+          status: 'showing',
           displayed_at: new Date().toISOString(),
         });
       }
@@ -787,13 +759,13 @@ export function TvPlayer({
   useEffect(() => {
     if (!activeInterruption) return;
     const interruptionId = activeInterruption.id;
-    const isCall = activeInterruption.kind === "call";
+    const isCall = activeInterruption.kind === 'call';
     const timer = runtime.timeout(() => {
       setInterruptions((queue) => queue.filter((i) => i.id !== interruptionId));
       setActiveInterruption(null);
       if (isCall)
         void updateCall(interruptionId, companyId, {
-          status: "completed",
+          status: 'completed',
           completed_at: new Date().toISOString(),
         });
       if (videoRef.current)
@@ -805,12 +777,7 @@ export function TvPlayer({
   }, [activeInterruption, companyId, current?.volume, runtime]);
 
   useEffect(() => {
-    if (
-      !activeInterruption ||
-      activeInterruption.kind !== "call" ||
-      !activated ||
-      !soundEnabled
-    )
+    if (!activeInterruption || activeInterruption.kind !== 'call' || !activated || !soundEnabled)
       return;
     let spoken = false;
     let cancelled = false;
@@ -844,27 +811,11 @@ export function TvPlayer({
       runtime.clear(delayTimer);
       speechService.cancel();
     };
-  }, [
-    activated,
-    activeInterruption,
-    businessName,
-    callSettings,
-    runtime,
-    soundEnabled,
-  ]);
+  }, [activated, activeInterruption, businessName, callSettings, runtime, soundEnabled]);
 
   useEffect(() => {
-    if (
-      !activated ||
-      !current ||
-      current.media.type === "video" ||
-      activeInterruption
-    )
-      return;
-    const timer = runtime.timeout(
-      advanceToNext,
-      current.durationSeconds * 1000,
-    );
+    if (!activated || !current || current.media.type === 'video' || activeInterruption) return;
+    const timer = runtime.timeout(advanceToNext, current.durationSeconds * 1000);
     return () => runtime.clear(timer);
   }, [activated, activeInterruption, advanceToNext, current, runtime]);
 
@@ -877,9 +828,7 @@ export function TvPlayer({
       await tvAudioService.unlockAudio();
     } catch (error) {
       // Falhar ao liberar o som não pode impedir a imagem no Fully Kiosk.
-      const message = error instanceof Error
-        ? error.message
-        : "Não foi possível ativar o áudio.";
+      const message = error instanceof Error ? error.message : 'Não foi possível ativar o áudio.';
       setActivationError(message);
       runtime.error(message);
     }
@@ -892,10 +841,7 @@ export function TvPlayer({
         runtime.error(error);
       }
     }
-    window.localStorage.setItem(
-      activationKey(displayId),
-      new Date().toISOString(),
-    );
+    window.localStorage.setItem(activationKey(displayId), new Date().toISOString());
     setActivated(true);
     setActivating(false);
     try {
@@ -907,10 +853,10 @@ export function TvPlayer({
   if (!current)
     return (
       <main className="tv-screen" aria-label="TV sem programação">
-        {!activated ? <AudioUnlock onClick={activate} activating={activating} error={activationError} /> : null}
-        {activeInterruption ? (
-          <CallOverlay interruption={activeInterruption} />
+        {!activated ? (
+          <AudioUnlock onClick={activate} activating={activating} error={activationError} />
         ) : null}
+        {activeInterruption ? <CallOverlay interruption={activeInterruption} /> : null}
         {diagnosticMode ? (
           <AudioDiagnostic
             diagnostics={audioDiagnostics}
@@ -933,7 +879,9 @@ export function TvPlayer({
         playbackEnabled={activated}
         onVideoEvent={(event, video) => {
           if (diagnosticMode)
-            runtime.lifecycle(`video:${event} ready=${video.readyState} network=${video.networkState} time=${video.currentTime.toFixed(1)} muted=${video.muted}`);
+            runtime.lifecycle(
+              `video:${event} ready=${video.readyState} network=${video.networkState} time=${video.currentTime.toFixed(1)} muted=${video.muted}`,
+            );
         }}
         onEnded={() => {
           runtime.lifecycle(`vídeo finalizado: ${current.media.title ?? current.id}`);
@@ -945,14 +893,12 @@ export function TvPlayer({
         }}
       />
       {videoRecovery?.mediaId === current.media.id ? (
-        <div className={`video-recovery${videoRecovery.failed ? " failed" : ""}`} role="status">
-          <strong>{videoRecovery.failed ? "Vídeo indisponível" : "Otimizando vídeo"}</strong>
+        <div className={`video-recovery${videoRecovery.failed ? ' failed' : ''}`} role="status">
+          <strong>{videoRecovery.failed ? 'Vídeo indisponível' : 'Otimizando vídeo'}</strong>
           <span>{videoRecovery.message}</span>
         </div>
       ) : null}
-      {activeInterruption ? (
-        <CallOverlay interruption={activeInterruption} />
-      ) : null}
+      {activeInterruption ? <CallOverlay interruption={activeInterruption} /> : null}
       {!activated ? (
         <AudioUnlock onClick={activate} activating={activating} error={activationError} />
       ) : null}
@@ -982,22 +928,30 @@ function AudioUnlock({
         <span>Famintoos TV</span>
         <h1>Pronto para iniciar</h1>
         <p>Pressione o botão abaixo com o controle remoto para liberar imagem e som.</p>
-        <button className="audio-unlock" onClick={() => void onClick()} disabled={activating} autoFocus>
-          {activating ? "Iniciando exibição..." : "Iniciar exibição"}
+        <button
+          className="audio-unlock"
+          onClick={() => void onClick()}
+          disabled={activating}
+          autoFocus
+        >
+          {activating ? 'Iniciando exibição...' : 'Iniciar exibição'}
         </button>
-        {error ? <p className="activation-error" role="alert">{error}</p> : null}
+        {error ? (
+          <p className="activation-error" role="alert">
+            {error}
+          </p>
+        ) : null}
       </div>
     </div>
   );
 }
 
-function isScheduledNow(media: TvPlaylistRecord["media"]) {
+function isScheduledNow(media: TvPlaylistRecord['media']) {
   const now = new Date();
   const today = localDateKey(now);
   if (media.starts_at && today < media.starts_at.slice(0, 10)) return false;
   if (media.ends_at && today > media.ends_at.slice(0, 10)) return false;
-  if (media.weekdays?.length && !media.weekdays.includes(now.getDay()))
-    return false;
+  if (media.weekdays?.length && !media.weekdays.includes(now.getDay())) return false;
   const time = now.toTimeString().slice(0, 8);
   if (media.start_time && time < media.start_time) return false;
   if (media.end_time && time > media.end_time) return false;
@@ -1006,8 +960,8 @@ function isScheduledNow(media: TvPlaylistRecord["media"]) {
 
 function localDateKey(date: Date) {
   const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
 }
 
@@ -1015,33 +969,31 @@ async function updateCall(
   id: string,
   companyId: string,
   values:
-    | { status: "showing"; displayed_at: string }
-    | { status: "completed"; completed_at: string },
+    | { status: 'showing'; displayed_at: string }
+    | { status: 'completed'; completed_at: string },
 ) {
   if (!supabase) return;
   for (let attempt = 0; attempt < 3; attempt += 1) {
     const { data, error } = await supabase
-      .from("tv_calls")
+      .from('tv_calls')
       .update(values)
-      .eq("id", id)
-      .eq("company_id", companyId)
-      .select("id")
+      .eq('id', id)
+      .eq('company_id', companyId)
+      .select('id')
       .maybeSingle();
     if (!error && data) return;
   }
 }
 
 function CallOverlay({ interruption }: { interruption: Interruption }) {
-  const isCall = interruption.kind === "call";
+  const isCall = interruption.kind === 'call';
   return (
     <div className="call-overlay" role="status" aria-live="assertive">
       <div>
         {isCall ? <span className="call-kicker">Chamando</span> : null}
         <strong>
           {isCall
-            ? (interruption.subtitle ??
-              interruption.callValues?.order_number ??
-              interruption.title)
+            ? (interruption.subtitle ?? interruption.callValues?.order_number ?? interruption.title)
             : interruption.title}
         </strong>
         <p>
@@ -1067,33 +1019,24 @@ function AudioDiagnostic({
   return (
     <aside className="audio-diagnostic">
       <strong>Diagnóstico do player</strong>
-      <span>áudio habilitado: {diagnostics.enabled ? "sim" : "não"}</span>
-      <span>sound_enabled: {soundEnabled ? "true" : "false"}</span>
+      <span>áudio habilitado: {diagnostics.enabled ? 'sim' : 'não'}</span>
+      <span>sound_enabled: {soundEnabled ? 'true' : 'false'}</span>
       <span>volume: {Math.round(diagnostics.volume * 100)}%</span>
       <span>AudioContext: {diagnostics.contextState}</span>
-      <span>mídia carregada: {diagnostics.loadedMedia ?? "nenhuma"}</span>
-      <span>última mídia: {player.lastMedia ?? "nenhuma"}</span>
+      <span>mídia carregada: {diagnostics.loadedMedia ?? 'nenhuma'}</span>
+      <span>última mídia: {player.lastMedia ?? 'nenhuma'}</span>
       <span>recursos: {player.approximateResources}</span>
       <span>subscriptions: {player.subscriptionCount}</span>
       <span>timers gerenciados: {player.timerCount}</span>
       <span>
         cache/preload: {player.cachedItems}/{player.preloadCount}
       </span>
-      <span>última reconexão: {player.lastReconnectAt ?? "nenhuma"}</span>
-      <span>último evento: {player.lastLifecycleEvent ?? "nenhum"}</span>
-      <span>último reload: {player.lastReloadReason ?? "nenhum"}</span>
+      <span>última reconexão: {player.lastReconnectAt ?? 'nenhuma'}</span>
+      <span>último evento: {player.lastLifecycleEvent ?? 'nenhum'}</span>
+      <span>último reload: {player.lastReloadReason ?? 'nenhum'}</span>
+      <span>voz: {speech.supported ? `${speech.voiceCount} disponível(is)` : 'indisponível'}</span>
       <span>
-        voz:{" "}
-        {speech.supported
-          ? `${speech.voiceCount} disponível(is)`
-          : "indisponível"}
-      </span>
-      <span>
-        último erro:{" "}
-        {player.lastError ??
-          diagnostics.lastError ??
-          speech.lastError ??
-          "nenhum"}
+        último erro: {player.lastError ?? diagnostics.lastError ?? speech.lastError ?? 'nenhum'}
       </span>
     </aside>
   );
@@ -1136,8 +1079,7 @@ function Media({
   );
   useEffect(
     () => () => {
-      if (attachedVideo.current)
-        tvAudioService.releaseMedia(attachedVideo.current);
+      if (attachedVideo.current) tvAudioService.releaseMedia(attachedVideo.current);
       videoRef.current = null;
     },
     [videoRef],
@@ -1145,12 +1087,17 @@ function Media({
   const restoreAndPlay = useCallback(async () => {
     const video = videoRef.current;
     if (!video || !playbackEnabled) return;
-    if (!playbackPositionRestored.current && video.readyState >= 1 && Number.isFinite(video.duration)) {
+    if (
+      !playbackPositionRestored.current &&
+      video.readyState >= 1 &&
+      Number.isFinite(video.duration)
+    ) {
       playbackPositionRestored.current = true;
       try {
-        const savedSecond = saved?.itemId === item.id && Number.isFinite(saved.elapsedSeconds)
-          ? Math.max(0, saved.elapsedSeconds)
-          : 0;
+        const savedSecond =
+          saved?.itemId === item.id && Number.isFinite(saved.elapsedSeconds)
+            ? Math.max(0, saved.elapsedSeconds)
+            : 0;
         // Um snapshot no último segundo representa uma execução concluída e
         // deve reiniciar, nunca reaparecer como um quadro preto no fim.
         const targetSecond = video.duration - savedSecond > 1 ? savedSecond : 0;
@@ -1189,8 +1136,9 @@ function Media({
 
   useEffect(() => {
     const video = videoRef.current;
-    if (!video || item.media.type !== "video") return;
-    const audible = audioActivated && soundEnabled && !item.muted && !item.soundtrack?.muteOriginalAudio;
+    if (!video || item.media.type !== 'video') return;
+    const audible =
+      audioActivated && soundEnabled && !item.muted && !item.soundtrack?.muteOriginalAudio;
     if (!audible) {
       video.muted = true;
       return;
@@ -1203,11 +1151,12 @@ function Media({
   }, [audioActivated, item, soundEnabled, videoRef]);
   return (
     <div
-      className={`media-layer ${item.media.type === "video" ? "media-layer-video" : ""}`}
-      style={{ "--media-fit": item.fit } as React.CSSProperties}
+      className={`media-layer ${item.media.type === 'video' ? 'media-layer-video' : ''}`}
+      style={{ '--media-fit': item.fit } as React.CSSProperties}
     >
-      {item.media.type === "video" && url ? (
+      {item.media.type === 'video' && url ? (
         <video
+          key={url}
           className="tv-video"
           ref={attachVideo}
           src={url}
@@ -1215,46 +1164,63 @@ function Media({
           muted
           controls={false}
           disablePictureInPicture
-          onLoadedMetadata={(event) => { onVideoEvent("loadedmetadata", event.currentTarget); void restoreAndPlay(); }}
-          onLoadedData={(event) => { onVideoEvent("loadeddata", event.currentTarget); void restoreAndPlay(); }}
-          onCanPlay={(event) => { onVideoEvent("canplay", event.currentTarget); void restoreAndPlay(); }}
-          onPlaying={(event) => onVideoEvent("playing", event.currentTarget)}
-          onWaiting={(event) => onVideoEvent("waiting", event.currentTarget)}
-          onStalled={(event) => onVideoEvent("stalled", event.currentTarget)}
-          onEnded={onEnded}
-          onError={(event) =>
-            onError(mediaPlaybackError(event.currentTarget, item))
-          }
+          onLoadedMetadata={(event) => {
+            onVideoEvent('loadedmetadata', event.currentTarget);
+            void restoreAndPlay();
+          }}
+          onLoadedData={(event) => {
+            onVideoEvent('loadeddata', event.currentTarget);
+            void restoreAndPlay();
+          }}
+          onCanPlay={(event) => {
+            onVideoEvent('canplay', event.currentTarget);
+            void restoreAndPlay();
+          }}
+          onPlaying={(event) => onVideoEvent('playing', event.currentTarget)}
+          onWaiting={(event) => onVideoEvent('waiting', event.currentTarget)}
+          onStalled={(event) => onVideoEvent('stalled', event.currentTarget)}
+          onEnded={(event) => {
+            const video = event.currentTarget;
+            try {
+              video.pause();
+              video.currentTime = 0;
+              video.load();
+            } catch {
+              /* Some TV browsers reject resets immediately after ended. */
+            }
+            onEnded();
+          }}
+          onError={(event) => onError(mediaPlaybackError(event.currentTarget, item))}
           playsInline
         />
       ) : null}
-      {item.media.type === "image" && url ? (
+      {item.media.type === 'image' && url ? (
         <>
-          {item.fit === "blur_background" ? (
+          {item.fit === 'blur_background' ? (
             <img className="media-blurred-background" src={url} alt="" aria-hidden="true" />
           ) : null}
           <img
-            className={`media-main-image ${item.fit === "blur_background" ? "media-main-image-centered" : ""} image-motion image-motion-${item.media.animation ?? "none"}`}
-            style={{
-              "--motion-duration": `${item.durationSeconds}s`,
-            } as React.CSSProperties}
+            className={`media-main-image ${item.fit === 'blur_background' ? 'media-main-image-centered' : ''} image-motion image-motion-${item.media.animation ?? 'none'}`}
+            style={
+              {
+                '--motion-duration': `${item.durationSeconds}s`,
+              } as React.CSSProperties
+            }
             src={url}
-            alt={item.media.title ?? ""}
+            alt={item.media.title ?? ''}
             onError={() =>
-              onError(
-                new Error(
-                  `Falha ao carregar imagem: ${item.media.title ?? item.id}`,
-                ),
-              )
+              onError(new Error(`Falha ao carregar imagem: ${item.media.title ?? item.id}`))
             }
           />
         </>
       ) : null}
-      {item.media.type === "message" ? (
+      {item.media.type === 'message' ? (
         <div className="message-content">{item.media.title}</div>
       ) : null}
       {item.overlayText ? (
-        <div className={`media-caption caption-${item.overlayAnimation ?? "none"}`}>{item.overlayText}</div>
+        <div className={`media-caption caption-${item.overlayAnimation ?? 'none'}`}>
+          {item.overlayText}
+        </div>
       ) : null}
       {item.qrCodeUrl ? (
         <div className="qr-overlay">
@@ -1268,22 +1234,20 @@ function Media({
 
 async function playVideo(video: HTMLVideoElement) {
   const result = video.play();
-  if (result && typeof result.then === "function") await result;
+  if (result && typeof result.then === 'function') await result;
 }
 
 function mediaPlaybackError(video: HTMLVideoElement, item: ProgramItem) {
   const code = video.error?.code;
   const reason =
     code === 4
-      ? "formato incompatível (use MP4 com vídeo H.264 e áudio AAC)"
+      ? 'formato incompatível (use MP4 com vídeo H.264 e áudio AAC)'
       : code === 3
-        ? "o navegador não conseguiu decodificar o arquivo"
+        ? 'o navegador não conseguiu decodificar o arquivo'
         : code === 2
-          ? "falha de rede ao baixar o arquivo"
+          ? 'falha de rede ao baixar o arquivo'
           : code === 1
-            ? "reprodução interrompida"
-            : "reprodução bloqueada pelo navegador";
-  return new Error(
-    `Falha no vídeo ${item.media.title ?? item.id}: ${reason}.`,
-  );
+            ? 'reprodução interrompida'
+            : 'reprodução bloqueada pelo navegador';
+  return new Error(`Falha no vídeo ${item.media.title ?? item.id}: ${reason}.`);
 }
