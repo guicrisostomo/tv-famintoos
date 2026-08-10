@@ -854,13 +854,19 @@ export function TvPlayer({ companyId, displayId }: { companyId: string; displayI
     return () => runtime.clear(timer);
   }, [activated, activeInterruption, advanceToNext, current, runtime]);
 
-  const activate = async () => {
+  const activate = () => {
+    const startedAt = performance.now();
     setActivating(true);
     setActivationError(null);
     try {
       tvAudioService.initializeAudio();
       tvAudioService.setEnabled(soundEnabled);
-      await tvAudioService.unlockAudio();
+      void tvAudioService.unlockAudio().catch((error) => {
+        // Falhar ao liberar o som não pode impedir a imagem no Fully Kiosk.
+        const message = error instanceof Error ? error.message : 'Não foi possível ativar o áudio.';
+        setActivationError(message);
+        runtime.error(message);
+      });
     } catch (error) {
       // Falhar ao liberar o som não pode impedir a imagem no Fully Kiosk.
       const message = error instanceof Error ? error.message : 'Não foi possível ativar o áudio.';
@@ -868,22 +874,16 @@ export function TvPlayer({ companyId, displayId }: { companyId: string; displayI
       runtime.error(message);
     }
     const video = videoRef.current;
-    if (video) {
+    if (current?.media.type === 'video' && video && (video.currentSrc || video.src)) {
       video.muted = true;
-      try {
-        await playVideoElement(video);
-      } catch (error) {
-        runtime.error(error);
-      }
+      void playVideoElement(video).catch((error) => runtime.error(error));
     }
     window.localStorage.setItem(activationKey(displayId), new Date().toISOString());
     setActivated(true);
     setActivating(false);
-    try {
-      await document.documentElement.requestFullscreen?.();
-    } catch {
-      /* fullscreen is optional */
-    }
+    runtime.lifecycle(`exibição liberada em ${Math.round(performance.now() - startedAt)} ms`);
+    const fullscreen = document.documentElement.requestFullscreen?.();
+    if (fullscreen) void fullscreen.catch(() => undefined);
   };
   if (!current)
     return (
@@ -952,7 +952,7 @@ function AudioUnlock({
   activating,
   error,
 }: {
-  onClick: () => Promise<void>;
+  onClick: () => void;
   activating: boolean;
   error: string | null;
 }) {
@@ -964,7 +964,7 @@ function AudioUnlock({
         <p>Pressione o botão abaixo com o controle remoto para liberar imagem e som.</p>
         <button
           className="audio-unlock"
-          onClick={() => void onClick()}
+          onClick={onClick}
           disabled={activating}
           autoFocus
         >
