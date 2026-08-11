@@ -171,6 +171,7 @@ export function ContentComposer({
     watermarkEnabled: false,
     watermarkName: "",
     watermarkLogoMediaId: null,
+    watermarkLogoUrl: "",
     watermarkPhone: "",
     watermarkExtraText: "",
   });
@@ -335,9 +336,14 @@ export function ContentComposer({
       setError("Digite o texto que será exibido.");
       return;
     }
+    if (presentation.watermarkEnabled && presentation.watermarkLogoUrl.trim() && !presentation.watermarkLogoUrl.trim().startsWith("https://")) {
+      setError("A URL do logo precisa começar com https://.");
+      return;
+    }
     if (
       presentation.watermarkEnabled &&
       !presentation.watermarkLogoMediaId &&
+      !presentation.watermarkLogoUrl.trim() &&
       !presentation.watermarkName.trim() &&
       !presentation.watermarkPhone.trim() &&
       !presentation.watermarkExtraText.trim()
@@ -472,6 +478,7 @@ export function ContentComposer({
         watermark_enabled: presentation.watermarkEnabled,
         watermark_name: presentation.watermarkEnabled ? presentation.watermarkName.trim() || null : null,
         watermark_logo_media_id: presentation.watermarkEnabled ? presentation.watermarkLogoMediaId : null,
+        watermark_logo_url: presentation.watermarkEnabled && !presentation.watermarkLogoMediaId ? presentation.watermarkLogoUrl.trim() || null : null,
         watermark_phone: presentation.watermarkEnabled ? presentation.watermarkPhone.trim() || null : null,
         watermark_extra_text: presentation.watermarkEnabled ? presentation.watermarkExtraText.trim() || null : null,
       }));

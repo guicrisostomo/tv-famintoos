@@ -56,6 +56,7 @@ export function EditProgrammingItem({
     watermarkEnabled: item.watermark_enabled ?? false,
     watermarkName: item.watermark_name ?? "",
     watermarkLogoMediaId: item.watermark_logo_media_id ?? null,
+    watermarkLogoUrl: item.watermark_logo_url ?? "",
     watermarkPhone: item.watermark_phone ?? "",
     watermarkExtraText: item.watermark_extra_text ?? "",
   });
@@ -87,9 +88,14 @@ export function EditProgrammingItem({
       setError("Informe o texto que será exibido.");
       return;
     }
+    if (presentation.watermarkEnabled && presentation.watermarkLogoUrl.trim() && !presentation.watermarkLogoUrl.trim().startsWith("https://")) {
+      setError("A URL do logo precisa começar com https://.");
+      return;
+    }
     if (
       presentation.watermarkEnabled &&
       !presentation.watermarkLogoMediaId &&
+      !presentation.watermarkLogoUrl.trim() &&
       !presentation.watermarkName.trim() &&
       !presentation.watermarkPhone.trim() &&
       !presentation.watermarkExtraText.trim()
@@ -142,6 +148,7 @@ export function EditProgrammingItem({
             watermark_enabled: presentation.watermarkEnabled,
             watermark_name: presentation.watermarkEnabled ? presentation.watermarkName.trim() || null : null,
             watermark_logo_media_id: presentation.watermarkEnabled ? presentation.watermarkLogoMediaId : null,
+            watermark_logo_url: presentation.watermarkEnabled && !presentation.watermarkLogoMediaId ? presentation.watermarkLogoUrl.trim() || null : null,
             watermark_phone: presentation.watermarkEnabled ? presentation.watermarkPhone.trim() || null : null,
             watermark_extra_text: presentation.watermarkEnabled ? presentation.watermarkExtraText.trim() || null : null,
           })
@@ -207,6 +214,7 @@ export function EditProgrammingItem({
               watermark_enabled: presentation.watermarkEnabled,
               watermark_name: presentation.watermarkEnabled ? presentation.watermarkName.trim() || null : null,
               watermark_logo_media_id: presentation.watermarkEnabled ? presentation.watermarkLogoMediaId : null,
+              watermark_logo_url: presentation.watermarkEnabled && !presentation.watermarkLogoMediaId ? presentation.watermarkLogoUrl.trim() || null : null,
               watermark_phone: presentation.watermarkEnabled ? presentation.watermarkPhone.trim() || null : null,
               watermark_extra_text: presentation.watermarkEnabled ? presentation.watermarkExtraText.trim() || null : null,
               position: (maxPositions.get(displayId) ?? -1) + 1,

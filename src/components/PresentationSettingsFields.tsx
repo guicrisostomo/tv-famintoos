@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Check, Play, Sparkles } from "lucide-react";
 import type { TvImageFit, TvMediaRecord, TvTransitionType } from "../hooks/useTvData";
 import { supabase } from "../services/supabase";
+import { transitionOptions } from "./presentationOptions";
 
 export interface PresentationSettings {
   transitionType: TvTransitionType;
@@ -9,6 +10,7 @@ export interface PresentationSettings {
   watermarkEnabled: boolean;
   watermarkName: string;
   watermarkLogoMediaId: string | null;
+  watermarkLogoUrl: string;
   watermarkPhone: string;
   watermarkExtraText: string;
 }
@@ -19,19 +21,6 @@ interface PresentationPreview {
   message?: string;
   fit?: TvImageFit;
 }
-
-const transitionOptions: Array<{
-  value: TvTransitionType;
-  label: string;
-  description: string;
-}> = [
-  { value: "fade", label: "Dissolver", description: "Entrada suave e elegante" },
-  { value: "slide_left", label: "Deslizar", description: "Entra pela lateral direita" },
-  { value: "slide_up", label: "Subir", description: "Movimento vertical discreto" },
-  { value: "zoom", label: "Zoom", description: "Aproximação cinematográfica" },
-  { value: "wipe", label: "Revelar", description: "Abertura lateral dinâmica" },
-  { value: "none", label: "Sem efeito", description: "Troca imediata de conteúdo" },
-];
 
 export function PresentationSettingsFields({
   companyId,
@@ -73,7 +62,7 @@ export function PresentationSettingsFields({
   }, [companyId]);
 
   const selectedLogo = logos.find((item) => item.id === value.watermarkLogoMediaId);
-  const logoUrl = selectedLogo?.public_url ?? selectedLogo?.media_url;
+  const logoUrl = selectedLogo?.public_url ?? selectedLogo?.media_url ?? value.watermarkLogoUrl;
   const update = (partial: Partial<PresentationSettings>) =>
     onChange({ ...value, ...partial });
   const selectTransition = (transitionType: TvTransitionType) => {
@@ -158,17 +147,17 @@ export function PresentationSettingsFields({
                 <div className="logo-picker-grid">
                   <button
                     type="button"
-                    className={!value.watermarkLogoMediaId ? "selected" : ""}
-                    onClick={() => update({ watermarkLogoMediaId: null })}
+                    className={!value.watermarkLogoMediaId && !value.watermarkLogoUrl ? "selected" : ""}
+                    onClick={() => update({ watermarkLogoMediaId: null, watermarkLogoUrl: "" })}
                   >
                     <span className="logo-empty">Sem logo</span>
-                    {!value.watermarkLogoMediaId ? <Check size={15} /> : null}
+                    {!value.watermarkLogoMediaId && !value.watermarkLogoUrl ? <Check size={15} /> : null}
                   </button>
                   {logos.map((item) => {
                     const imageUrl = item.public_url ?? item.media_url;
                     const selected = value.watermarkLogoMediaId === item.id;
                     return (
-                      <button key={item.id} type="button" className={selected ? "selected" : ""} onClick={() => update({ watermarkLogoMediaId: item.id })}>
+                      <button key={item.id} type="button" className={selected ? "selected" : ""} onClick={() => update({ watermarkLogoMediaId: item.id, watermarkLogoUrl: "" })}>
                         {imageUrl ? <img src={imageUrl} alt="" /> : <span className="logo-empty">Sem prévia</span>}
                         <small>{item.title}</small>
                         {selected ? <Check size={15} /> : null}
@@ -176,6 +165,16 @@ export function PresentationSettingsFields({
                     );
                   })}
                 </div>
+                <label className="logo-url-field">
+                  Ou use uma URL HTTPS
+                  <input
+                    type="url"
+                    maxLength={2048}
+                    value={value.watermarkLogoUrl}
+                    onChange={(event) => update({ watermarkLogoMediaId: null, watermarkLogoUrl: event.target.value })}
+                    placeholder="https://site.com/logo.png"
+                  />
+                </label>
                 {!logos.length && !logoError ? <p className="form-hint">Envie uma imagem para a biblioteca caso queira utilizar um logo.</p> : null}
               </fieldset>
             </div>

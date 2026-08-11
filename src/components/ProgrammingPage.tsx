@@ -1,8 +1,8 @@
-import { useMemo, useState } from 'react'
+import { lazy, Suspense, useMemo, useState } from 'react'
 import { DndContext, type DragEndEvent, PointerSensor, useSensor, useSensors } from '@dnd-kit/core'
 import { arrayMove, SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { CalendarDays, Download, ExternalLink, GripVertical, MessageSquareText, Pencil, Plus, Trash2, Video } from 'lucide-react'
+import { CalendarDays, Download, ExternalLink, GripVertical, MessageSquareText, Pencil, Plus, Trash2, Video, WandSparkles } from 'lucide-react'
 import type { TvDisplayRecord, TvPlaylistRecord } from '../hooks/useTvData'
 import { supabase } from '../services/supabase'
 import { ContentComposer } from './ContentComposer'
@@ -11,10 +11,12 @@ import { PreviewPanel } from './PreviewPanel'
 import { hasItemSchedule, isItemScheduledOnDate } from './programSchedule'
 
 const hasSchedule = hasItemSchedule
+const BulkAppearancePage = lazy(() => import('./BulkAppearancePage'))
 
 export function ProgrammingPage({ companyId, displays, items, onReload }: { companyId: string; displays: TvDisplayRecord[]; items: TvPlaylistRecord[]; onReload: () => Promise<void> }) {
   const [composerOpen, setComposerOpen] = useState(false)
   const [editingItem, setEditingItem] = useState<TvPlaylistRecord | null>(null)
+  const [bulkAppearanceOpen, setBulkAppearanceOpen] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [selectedDisplay, setSelectedDisplay] = useState('')
   const todayItems = useMemo(() => items.filter(item => isItemScheduledOnDate(item, new Date())), [items])
@@ -24,6 +26,8 @@ export function ProgrammingPage({ companyId, displays, items, onReload }: { comp
   const groupedItems = useMemo(() => displays.map(display => ({ display, items: visibleItems.filter(item => item.display_id === display.id) })).filter(group => group.items.length), [displays, visibleItems])
   const scheduledCount = visibleItems.filter(item => hasItemSchedule(item)).length
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }))
+
+  if (bulkAppearanceOpen) return <Suspense fallback={<div className="card loading-screen">Carregando configuração em massa...</div>}><BulkAppearancePage companyId={companyId} items={items} onBack={() => setBulkAppearanceOpen(false)} onSaved={onReload}/></Suspense>
 
   const moveItem = async ({ active, over }: DragEndEvent) => {
     if (!selectedDisplay || !over || active.id === over.id || !supabase) return
@@ -55,7 +59,7 @@ export function ProgrammingPage({ companyId, displays, items, onReload }: { comp
 
   return <>
     {error ? <div className="system-alert error" role="alert">{error}</div> : null}
-    <div className="page-header"><div><h1>Programação de hoje</h1><p>A sequência abaixo mostra somente os conteúdos válidos para a data atual.</p></div><div className="page-actions"><button className="button primary" onClick={() => setComposerOpen(true)}><Plus size={16}/> Adicionar conteúdo</button></div></div>
+    <div className="page-header"><div><h1>Programação de hoje</h1><p>A sequência abaixo mostra somente os conteúdos válidos para a data atual.</p></div><div className="page-actions"><button className="button secondary" onClick={() => setBulkAppearanceOpen(true)}><WandSparkles size={16}/> Aparência em massa</button><button className="button primary" onClick={() => setComposerOpen(true)}><Plus size={16}/> Adicionar conteúdo</button></div></div>
 
     <section className="card programming-control">
       <div className="programming-tv-select"><div><span className="step-label">1. Escolha onde configurar</span><strong>{selectedTv?.name ?? 'Visão geral de todas as TVs'}</strong><small>{selectedTv?.description ?? (selectedDisplay ? 'TV selecionada' : 'Os conteúdos estão agrupados por televisão.')}</small></div><label>Televisão<select value={selectedDisplay} onChange={event => setSelectedDisplay(event.target.value)}><option value="">Todas as TVs</option>{displays.map(display => <option key={display.id} value={display.id}>{display.name}</option>)}</select></label>{selectedDisplay ? <a className="button secondary" href={`/tv/${companyId}/${selectedDisplay}`} target="_blank" rel="noreferrer"><ExternalLink size={15}/> Abrir TV</a> : null}</div>
