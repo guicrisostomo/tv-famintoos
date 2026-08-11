@@ -35,22 +35,45 @@ h1, h2, h3, p { margin-top: 0; }
   border: 0;
 }
 
-/* Mantém a assinatura separada das legendas, com margem segura para TVs. */
-.tv-watermark.tv-watermark-top {
-  top: clamp(16px, 3vh, 42px);
-  bottom: auto;
+/* Mantém a assinatura embaixo e reserva uma zona segura para legendas. */
+.tv-watermark.tv-watermark-bottom {
+  top: auto;
+  bottom: clamp(16px, 3vh, 42px);
 }
 
-.preview .tv-watermark.tv-watermark-top,
-.presentation-preview .tv-watermark.tv-watermark-top {
-  top: 4%;
-  bottom: auto;
+.preview .tv-watermark.tv-watermark-bottom,
+.presentation-preview .tv-watermark.tv-watermark-bottom {
+  top: auto;
+  bottom: 4%;
+}
+
+.media-layer.has-watermark {
+  --watermark-safe-bottom: clamp(142px, 18vh, 230px);
+}
+
+.media-layer.has-watermark.has-watermark-qr {
+  --watermark-safe-bottom: clamp(165px, 23vh, 280px);
+}
+
+.media-layer.has-watermark .media-caption,
+.media-layer.has-watermark .qr-overlay {
+  bottom: var(--watermark-safe-bottom);
+}
+
+.preview.has-watermark .preview-caption,
+.presentation-preview.has-watermark .preview-caption {
+  bottom: 22%;
+}
+
+.preview.has-watermark.has-watermark-qr .preview-caption,
+.presentation-preview.has-watermark.has-watermark-qr .preview-caption {
+  bottom: 29%;
 }
 
 @media (max-width: 640px) {
-  .tv-watermark.tv-watermark-top {
-    top: 12px;
-    bottom: auto;
+  .tv-watermark.tv-watermark-bottom {
+    top: auto;
+    bottom: 12px;
   }
 }
 

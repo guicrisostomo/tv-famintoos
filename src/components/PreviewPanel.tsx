@@ -33,7 +33,7 @@ export function PreviewPanel({ items }: { items: TvPlaylistRecord[] }) {
       </div>
       <div
         key={`${currentItem?.id ?? "empty"}-${index}`}
-        className={`preview transition-preview-${currentItem?.transition_type ?? "none"}`}
+        className={`preview transition-preview-${currentItem?.transition_type ?? "none"}${currentItem?.watermark_enabled ? " has-watermark" : ""}${currentItem?.watermark_enabled && currentItem.watermark_qr_enabled && currentItem.watermark_qr_value?.trim() ? " has-watermark-qr" : ""}`}
         style={{ "--transition-duration": `${currentItem?.transition_duration_ms ?? 700}ms` } as React.CSSProperties}
       >
         {!current ? (

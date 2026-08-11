@@ -18,7 +18,7 @@ export function WatermarkOverlay({
   className?: string;
 }) {
   const encodedValue = qrValue?.trim() ?? "";
-  const classes = `tv-watermark tv-watermark-top${className ? ` ${className}` : ""}`;
+  const classes = `tv-watermark tv-watermark-bottom${className ? ` ${className}` : ""}`;
 
   return (
     <div className={classes}>

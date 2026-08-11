@@ -234,7 +234,7 @@ export function TvMediaStage({
   return (
     <div
       ref={stageRef}
-      className={`media-layer${isVideo ? " media-layer-video" : ""}`}
+      className={`media-layer${isVideo ? " media-layer-video" : ""}${item.watermark?.enabled ? " has-watermark" : ""}${item.watermark?.enabled && item.watermark.qrEnabled && item.watermark.qrValue?.trim() ? " has-watermark-qr" : ""}`}
       style={{ "--media-fit": mediaFit } as React.CSSProperties}
     >
       <video

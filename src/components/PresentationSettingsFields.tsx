@@ -291,7 +291,7 @@ export function PresentationSettingsFields({
         <div className="presentation-preview-heading"><strong>Prévia na TV</strong><span>Formato 16:9</span></div>
         <div
           key={`${value.transitionType}-${value.transitionDurationMs}-${previewRun}`}
-          className={`presentation-preview transition-preview-${value.transitionType}`}
+          className={`presentation-preview transition-preview-${value.transitionType}${value.watermarkEnabled ? " has-watermark" : ""}${value.watermarkEnabled && value.watermarkQrEnabled && value.watermarkQrValue.trim() ? " has-watermark-qr" : ""}`}
           style={{ "--transition-duration": `${value.transitionDurationMs}ms` } as React.CSSProperties}
         >
           {preview.type === "image" && preview.url ? (
