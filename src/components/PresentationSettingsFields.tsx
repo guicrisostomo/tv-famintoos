@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
-import { Check, Play, Sparkles } from "lucide-react";
+import { Check, LoaderCircle, Play, Sparkles, Upload } from "lucide-react";
 import type { TvImageFit, TvMediaRecord, TvTransitionType } from "../hooks/useTvData";
 import { supabase } from "../services/supabase";
+import { uploadWatermarkLogo } from "../services/watermarkLogo";
 import { transitionOptions } from "./presentationOptions";
 
 export interface PresentationSettings {
@@ -35,6 +36,7 @@ export function PresentationSettingsFields({
 }) {
   const [logos, setLogos] = useState<TvMediaRecord[]>([]);
   const [logoError, setLogoError] = useState<string | null>(null);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
   const [previewRun, setPreviewRun] = useState(0);
 
   useEffect(() => {
@@ -68,6 +70,20 @@ export function PresentationSettingsFields({
   const selectTransition = (transitionType: TvTransitionType) => {
     update({ transitionType });
     setPreviewRun((run) => run + 1);
+  };
+  const uploadLogo = async (file: File | null) => {
+    if (!file) return;
+    setUploadingLogo(true);
+    setLogoError(null);
+    try {
+      const logo = await uploadWatermarkLogo(companyId, file);
+      setLogos((current) => [logo, ...current.filter((item) => item.id !== logo.id)]);
+      update({ watermarkLogoMediaId: logo.id, watermarkLogoUrl: "" });
+    } catch (caught) {
+      setLogoError(caught instanceof Error ? caught.message : "Não foi possível enviar o logo.");
+    } finally {
+      setUploadingLogo(false);
+    }
   };
 
   return (
@@ -143,7 +159,23 @@ export function PresentationSettingsFields({
                 <input maxLength={160} value={value.watermarkExtraText} onChange={(event) => update({ watermarkExtraText: event.target.value })} placeholder="Site, endereço, slogan ou rede social" />
               </label>
               <fieldset className="logo-picker">
-                <legend>Logo da biblioteca</legend>
+                <legend>Logo</legend>
+                <div className="logo-upload-row">
+                  <label className="button secondary file-button">
+                    {uploadingLogo ? <LoaderCircle className="spin" size={16} /> : <Upload size={16} />}
+                    {uploadingLogo ? "Enviando logo..." : "Enviar uma nova imagem"}
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp"
+                      disabled={uploadingLogo}
+                      onChange={(event) => {
+                        const input = event.currentTarget;
+                        void uploadLogo(input.files?.[0] ?? null).finally(() => { input.value = ""; });
+                      }}
+                    />
+                  </label>
+                  <small>JPG, PNG ou WebP, até 10 MB. A imagem será salva no R2 da empresa.</small>
+                </div>
                 <div className="logo-picker-grid">
                   <button
                     type="button"
@@ -174,6 +206,7 @@ export function PresentationSettingsFields({
                     onChange={(event) => update({ watermarkLogoMediaId: null, watermarkLogoUrl: event.target.value })}
                     placeholder="https://site.com/logo.png"
                   />
+                  <small>A imagem da URL será copiada para o R2 ao salvar, evitando bloqueios na TV.</small>
                 </label>
                 {!logos.length && !logoError ? <p className="form-hint">Envie uma imagem para a biblioteca caso queira utilizar um logo.</p> : null}
               </fieldset>

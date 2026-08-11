@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { QRCodeSVG } from "qrcode.react";
 import type { ProgramItem } from "../domain/tv";
 import { playVideoElement, resolveMediaUrl } from "../services/media";
@@ -42,6 +42,40 @@ export function TvMediaStage({
   const playingSession = useRef("");
   const stageRef = useRef<HTMLDivElement | null>(null);
   const transitionCurtainRef = useRef<HTMLDivElement | null>(null);
+  const sourceWatermarkLogo = item.watermark?.logoUrl?.trim() ?? "";
+  const [resolvedWatermarkLogo, setResolvedWatermarkLogo] = useState(() => ({
+    source: sourceWatermarkLogo,
+    url: sourceWatermarkLogo,
+  }));
+  const watermarkLogoUrl =
+    resolvedWatermarkLogo.source === sourceWatermarkLogo
+      ? resolvedWatermarkLogo.url
+      : sourceWatermarkLogo;
+
+  useEffect(() => {
+    let active = true;
+    let objectUrl = "";
+    if (!sourceWatermarkLogo) return;
+    void fetch(sourceWatermarkLogo, {
+      cache: "force-cache",
+      mode: "cors",
+      referrerPolicy: "no-referrer",
+    })
+      .then((response) => {
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        return response.blob();
+      })
+      .then((blob) => {
+        if (!active) return;
+        objectUrl = URL.createObjectURL(blob);
+        setResolvedWatermarkLogo({ source: sourceWatermarkLogo, url: objectUrl });
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [sourceWatermarkLogo]);
 
   useEffect(() => {
     const stage = stageRef.current;
@@ -249,7 +283,13 @@ export function TvMediaStage({
       ) : null}
       {item.watermark?.enabled ? (
         <div className="tv-watermark">
-          {item.watermark.logoUrl ? <img src={item.watermark.logoUrl} alt="" /> : null}
+          {watermarkLogoUrl ? (
+            <img
+              src={watermarkLogoUrl}
+              alt=""
+              referrerPolicy="no-referrer"
+            />
+          ) : null}
           <div>
             {item.watermark.name ? <strong>{item.watermark.name}</strong> : null}
             {item.watermark.extraText ? <span>{item.watermark.extraText}</span> : null}

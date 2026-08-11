@@ -25,6 +25,7 @@ import {
   type R2ExistingObject,
 } from "../services/storage";
 import { supabase } from "../services/supabase";
+import { importWatermarkLogoUrl } from "../services/watermarkLogo";
 import { SoundPicker, type SoundSettings } from "./SoundPicker";
 import { PresentationSettingsFields, type PresentationSettings } from "./PresentationSettingsFields";
 import { ContentScheduleFields } from "./ContentScheduleFields";
@@ -354,6 +355,13 @@ export function ContentComposer({
     setSaving(true);
     setError(null);
     try {
+      let resolvedWatermarkLogoMediaId = presentation.watermarkLogoMediaId;
+      let resolvedWatermarkLogoUrl = presentation.watermarkLogoUrl.trim();
+      if (presentation.watermarkEnabled && !resolvedWatermarkLogoMediaId && resolvedWatermarkLogoUrl) {
+        const importedLogo = await importWatermarkLogoUrl(companyId, resolvedWatermarkLogoUrl);
+        resolvedWatermarkLogoMediaId = importedLogo.id;
+        resolvedWatermarkLogoUrl = importedLogo.public_url ?? importedLogo.media_url ?? resolvedWatermarkLogoUrl;
+      }
       let mediaUrl: string | null = null;
       let storageKey: string | null = null;
       let r2AssetId: number | null = null;
@@ -477,8 +485,8 @@ export function ContentComposer({
         transition_duration_ms: presentation.transitionDurationMs,
         watermark_enabled: presentation.watermarkEnabled,
         watermark_name: presentation.watermarkEnabled ? presentation.watermarkName.trim() || null : null,
-        watermark_logo_media_id: presentation.watermarkEnabled ? presentation.watermarkLogoMediaId : null,
-        watermark_logo_url: presentation.watermarkEnabled && !presentation.watermarkLogoMediaId ? presentation.watermarkLogoUrl.trim() || null : null,
+        watermark_logo_media_id: presentation.watermarkEnabled ? resolvedWatermarkLogoMediaId : null,
+        watermark_logo_url: presentation.watermarkEnabled ? resolvedWatermarkLogoUrl || null : null,
         watermark_phone: presentation.watermarkEnabled ? presentation.watermarkPhone.trim() || null : null,
         watermark_extra_text: presentation.watermarkEnabled ? presentation.watermarkExtraText.trim() || null : null,
       }));

@@ -8,11 +8,13 @@ import {
   MessageSquareText,
   Search,
   Sparkles,
+  Upload,
   Video,
   WandSparkles,
 } from "lucide-react";
 import type { TvMediaRecord, TvPlaylistRecord, TvTransitionType } from "../hooks/useTvData";
 import { supabase } from "../services/supabase";
+import { importWatermarkLogoUrl, uploadWatermarkLogo } from "../services/watermarkLogo";
 import { transitionOptions } from "./presentationOptions";
 
 interface BusinessAppearanceProfile {
@@ -67,6 +69,7 @@ export function BulkAppearancePage({
   const [logos, setLogos] = useState<TvMediaRecord[]>([]);
   const [loadingDefaults, setLoadingDefaults] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [previewRun, setPreviewRun] = useState(0);
@@ -162,6 +165,22 @@ export function BulkAppearancePage({
     setSuccess(null);
   };
 
+  const uploadLogo = async (file: File | null) => {
+    if (!file) return;
+    setUploadingLogo(true);
+    setError(null);
+    try {
+      const logo = await uploadWatermarkLogo(companyId, file);
+      setLogos((current) => [logo, ...current.filter((item) => item.id !== logo.id)]);
+      setWatermarkLogoMediaId(logo.id);
+      setWatermarkLogoUrl("");
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Não foi possível enviar o logo.");
+    } finally {
+      setUploadingLogo(false);
+    }
+  };
+
   const apply = async () => {
     if (!supabase) return;
     setError(null);
@@ -186,21 +205,31 @@ export function BulkAppearancePage({
       setError("Informe ao menos um dado para a marca d'água.");
       return;
     }
-    const changes: Record<string, string | number | boolean | null> = {};
-    if (applyTransition) {
-      changes.transition_type = transitionType;
-      changes.transition_duration_ms = transitionDurationMs;
-    }
-    if (applyWatermark) {
-      changes.watermark_enabled = watermarkEnabled;
-      changes.watermark_name = watermarkEnabled ? watermarkName.trim() || null : null;
-      changes.watermark_phone = watermarkEnabled ? watermarkPhone.trim() || null : null;
-      changes.watermark_extra_text = watermarkEnabled ? watermarkExtraText.trim() || null : null;
-      changes.watermark_logo_media_id = watermarkEnabled ? watermarkLogoMediaId : null;
-      changes.watermark_logo_url = watermarkEnabled && !watermarkLogoMediaId ? logoUrl || null : null;
-    }
     setSaving(true);
     try {
+      let resolvedLogoMediaId = watermarkLogoMediaId;
+      let resolvedLogoUrl = logoUrl;
+      if (applyWatermark && watermarkEnabled && !resolvedLogoMediaId && resolvedLogoUrl) {
+        const imported = await importWatermarkLogoUrl(companyId, resolvedLogoUrl);
+        resolvedLogoMediaId = imported.id;
+        resolvedLogoUrl = imported.public_url ?? imported.media_url ?? resolvedLogoUrl;
+        setLogos((current) => [imported, ...current.filter((item) => item.id !== imported.id)]);
+        setWatermarkLogoMediaId(imported.id);
+        setWatermarkLogoUrl("");
+      }
+      const changes: Record<string, string | number | boolean | null> = {};
+      if (applyTransition) {
+        changes.transition_type = transitionType;
+        changes.transition_duration_ms = transitionDurationMs;
+      }
+      if (applyWatermark) {
+        changes.watermark_enabled = watermarkEnabled;
+        changes.watermark_name = watermarkEnabled ? watermarkName.trim() || null : null;
+        changes.watermark_phone = watermarkEnabled ? watermarkPhone.trim() || null : null;
+        changes.watermark_extra_text = watermarkEnabled ? watermarkExtraText.trim() || null : null;
+        changes.watermark_logo_media_id = watermarkEnabled ? resolvedLogoMediaId : null;
+        changes.watermark_logo_url = watermarkEnabled && resolvedLogoMediaId ? resolvedLogoUrl || null : null;
+      }
       const { data, error: updateError } = await supabase
         .from("tv_playlist_items")
         .update(changes)
@@ -290,7 +319,39 @@ export function BulkAppearancePage({
                     <label className="watermark-extra-field">Informação complementar<input maxLength={160} value={watermarkExtraText} onChange={(event) => setWatermarkExtraText(event.target.value)} /></label>
                   </div>
                   {business ? <BusinessSuggestions business={business} onSelect={setWatermarkExtraText} /> : null}
-                  <fieldset className="bulk-logo-picker"><legend>Logo</legend><label>URL HTTPS do logo<input type="url" maxLength={2048} value={watermarkLogoUrl} onChange={(event) => { setWatermarkLogoMediaId(null); setWatermarkLogoUrl(event.target.value); }} placeholder="https://site.com/logo.png" /></label>{logos.length ? <label>Ou escolha uma imagem da biblioteca<select value={watermarkLogoMediaId ?? ""} onChange={(event) => { setWatermarkLogoMediaId(event.target.value || null); if (event.target.value) setWatermarkLogoUrl(""); }}><option value="">Usar URL acima</option>{logos.map((logo) => <option key={logo.id} value={logo.id}>{logo.title}</option>)}</select></label> : null}</fieldset>
+                  <fieldset className="bulk-logo-picker">
+                    <legend>Logo</legend>
+                    <div className="bulk-logo-upload">
+                      <label className="button secondary file-button">
+                        {uploadingLogo ? <LoaderCircle className="spin" size={16} /> : <Upload size={16} />}
+                        {uploadingLogo ? "Enviando..." : "Enviar nova imagem"}
+                        <input
+                          type="file"
+                          accept="image/jpeg,image/png,image/webp"
+                          disabled={uploadingLogo}
+                          onChange={(event) => {
+                            const input = event.currentTarget;
+                            void uploadLogo(input.files?.[0] ?? null).finally(() => { input.value = ""; });
+                          }}
+                        />
+                      </label>
+                      <small>JPG, PNG ou WebP, até 10 MB.</small>
+                    </div>
+                    <label>
+                      URL HTTPS do logo
+                      <input type="url" maxLength={2048} value={watermarkLogoUrl} onChange={(event) => { setWatermarkLogoMediaId(null); setWatermarkLogoUrl(event.target.value); }} placeholder="https://site.com/logo.png" />
+                      <small>A URL será copiada para o R2 ao aplicar, garantindo compatibilidade com a TV.</small>
+                    </label>
+                    {logos.length ? (
+                      <label>
+                        Ou escolha uma imagem da biblioteca
+                        <select value={watermarkLogoMediaId ?? ""} onChange={(event) => { setWatermarkLogoMediaId(event.target.value || null); if (event.target.value) setWatermarkLogoUrl(""); }}>
+                          <option value="">Usar URL acima</option>
+                          {logos.map((logo) => <option key={logo.id} value={logo.id}>{logo.title}</option>)}
+                        </select>
+                      </label>
+                    ) : null}
+                  </fieldset>
                 </>
               ) : null}
             </div>

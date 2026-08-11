@@ -68,8 +68,8 @@ export function PreviewPanel({ items }: { items: TvPlaylistRecord[] }) {
         ) : null}
         {currentItem?.watermark_enabled ? (
           <div className="tv-watermark preview-watermark">
-            {currentItem.watermark_logo && (currentItem.watermark_logo.public_url || currentItem.watermark_logo.media_url) ? (
-              <img src={currentItem.watermark_logo.public_url ?? currentItem.watermark_logo.media_url ?? undefined} alt="" />
+            {(currentItem.watermark_logo?.public_url || currentItem.watermark_logo?.media_url || currentItem.watermark_logo_url) ? (
+              <img src={currentItem.watermark_logo?.public_url ?? currentItem.watermark_logo?.media_url ?? currentItem.watermark_logo_url ?? undefined} alt="" />
             ) : null}
             <div>
               {currentItem.watermark_name ? <strong>{currentItem.watermark_name}</strong> : null}
