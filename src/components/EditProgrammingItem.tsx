@@ -8,7 +8,7 @@ import type {
   TvPlaylistRecord,
 } from "../hooks/useTvData";
 import { supabase } from "../services/supabase";
-import { importWatermarkLogoUrl } from "../services/watermarkLogo";
+import { resolveWatermarkLogo } from "../services/watermarkLogo";
 import { SoundPicker, type SoundSettings } from "./SoundPicker";
 import { PresentationSettingsFields, type PresentationSettings } from "./PresentationSettingsFields";
 import { ContentScheduleFields } from "./ContentScheduleFields";
@@ -110,7 +110,8 @@ export function EditProgrammingItem({
       let resolvedWatermarkLogoMediaId = presentation.watermarkLogoMediaId;
       let resolvedWatermarkLogoUrl = presentation.watermarkLogoUrl.trim();
       if (presentation.watermarkEnabled && !resolvedWatermarkLogoMediaId && resolvedWatermarkLogoUrl) {
-        const importedLogo = await importWatermarkLogoUrl(companyId, resolvedWatermarkLogoUrl);
+        const importedLogo = await resolveWatermarkLogo(companyId, null, resolvedWatermarkLogoUrl);
+        if (!importedLogo) throw new Error("Não foi possível localizar o logo selecionado.");
         resolvedWatermarkLogoMediaId = importedLogo.id;
         resolvedWatermarkLogoUrl = importedLogo.public_url ?? importedLogo.media_url ?? resolvedWatermarkLogoUrl;
       }

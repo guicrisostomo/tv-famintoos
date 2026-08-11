@@ -94,3 +94,35 @@ h1, h2, h3, p { margin-top: 0; }
   font-weight: 500;
   line-height: 1.35;
 }
+
+.r2-logo-picker {
+  display: grid;
+  gap: 7px;
+  margin: 9px 0;
+  padding: 9px;
+  border: 1px dashed #aebdb5;
+  border-radius: 9px;
+  background: #f8faf9;
+}
+
+.r2-logo-picker > .button {
+  width: 100%;
+}
+
+.r2-logo-picker > small {
+  color: var(--muted);
+  font-size: 9px;
+  text-align: center;
+}
+
+.r2-logo-choice {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 7px;
+}
+
+@media (max-width: 640px) {
+  .r2-logo-choice {
+    grid-template-columns: 1fr;
+  }
+}

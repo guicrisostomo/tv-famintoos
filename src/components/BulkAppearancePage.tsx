@@ -14,8 +14,10 @@ import {
 } from "lucide-react";
 import type { TvMediaRecord, TvPlaylistRecord, TvTransitionType } from "../hooks/useTvData";
 import { supabase } from "../services/supabase";
-import { importWatermarkLogoUrl, uploadWatermarkLogo } from "../services/watermarkLogo";
+import { resolveWatermarkLogo, uploadWatermarkLogo } from "../services/watermarkLogo";
 import { transitionOptions } from "./presentationOptions";
+import { R2LogoPicker } from "./R2LogoPicker";
+import { buildWatermarkTemplates, type WatermarkTemplate } from "./watermarkTemplates";
 
 interface BusinessAppearanceProfile {
   name: string;
@@ -65,6 +67,7 @@ export function BulkAppearancePage({
   const [watermarkExtraText, setWatermarkExtraText] = useState("");
   const [watermarkLogoMediaId, setWatermarkLogoMediaId] = useState<string | null>(null);
   const [watermarkLogoUrl, setWatermarkLogoUrl] = useState("");
+  const [selectedWatermarkTemplateId, setSelectedWatermarkTemplateId] = useState("");
   const [business, setBusiness] = useState<BusinessAppearanceProfile | null>(null);
   const [logos, setLogos] = useState<TvMediaRecord[]>([]);
   const [loadingDefaults, setLoadingDefaults] = useState(true);
@@ -87,6 +90,8 @@ export function BulkAppearancePage({
       displayIds: Array.from(group.displayIds),
     }));
   }, [items]);
+  const watermarkTemplates = useMemo(() => buildWatermarkTemplates(items), [items]);
+  const preferredWatermarkTemplate = watermarkTemplates[0] ?? null;
 
   const filteredContents = useMemo(() => {
     const term = search.trim().toLocaleLowerCase("pt-BR");
@@ -110,6 +115,16 @@ export function BulkAppearancePage({
     setWatermarkExtraText(profile.tagline || businessAddress(profile));
     setWatermarkLogoMediaId(null);
     setWatermarkLogoUrl(profile.icon || profile.og_image_url || profile.pwa_icon_512 || "");
+    setSelectedWatermarkTemplateId("");
+  }, []);
+
+  const fillFromTemplate = useCallback((template: WatermarkTemplate) => {
+    setWatermarkName(template.watermarkName);
+    setWatermarkPhone(template.watermarkPhone);
+    setWatermarkExtraText(template.watermarkExtraText);
+    setWatermarkLogoMediaId(template.watermarkLogoMediaId);
+    setWatermarkLogoUrl(template.watermarkLogoUrl);
+    setSelectedWatermarkTemplateId(template.id);
   }, []);
 
   useEffect(() => {
@@ -126,7 +141,7 @@ export function BulkAppearancePage({
           .maybeSingle(),
         client
           .from("tv_media")
-          .select("id,title,media_type,media_url,message_text,duration_seconds,public_url,storage_provider")
+          .select("id,title,media_type,media_url,message_text,duration_seconds,public_url,storage_provider,storage_key,file_size,r2_asset_id,created_at")
           .eq("company_id", companyId)
           .eq("media_type", "image")
           .eq("is_active", true)
@@ -139,14 +154,15 @@ export function BulkAppearancePage({
       const profile = businessResult.data as BusinessAppearanceProfile | null;
       setBusiness(profile);
       setLogos((logosResult.data ?? []) as TvMediaRecord[]);
-      if (profile) fillFromBusiness(profile);
+      if (preferredWatermarkTemplate) fillFromTemplate(preferredWatermarkTemplate);
+      else if (profile) fillFromBusiness(profile);
       setLoadingDefaults(false);
     };
     void load();
     return () => {
       active = false;
     };
-  }, [companyId, fillFromBusiness]);
+  }, [companyId, fillFromBusiness, fillFromTemplate, preferredWatermarkTemplate]);
 
   const toggleMedia = (mediaId: string) => {
     setSelectedMediaIds((current) =>
@@ -210,7 +226,8 @@ export function BulkAppearancePage({
       let resolvedLogoMediaId = watermarkLogoMediaId;
       let resolvedLogoUrl = logoUrl;
       if (applyWatermark && watermarkEnabled && !resolvedLogoMediaId && resolvedLogoUrl) {
-        const imported = await importWatermarkLogoUrl(companyId, resolvedLogoUrl);
+        const imported = await resolveWatermarkLogo(companyId, null, resolvedLogoUrl);
+        if (!imported) throw new Error("Não foi possível localizar o logo selecionado.");
         resolvedLogoMediaId = imported.id;
         resolvedLogoUrl = imported.public_url ?? imported.media_url ?? resolvedLogoUrl;
         setLogos((current) => [imported, ...current.filter((item) => item.id !== imported.id)]);
@@ -312,6 +329,25 @@ export function BulkAppearancePage({
               <label className="watermark-toggle"><input type="checkbox" checked={watermarkEnabled} onChange={(event) => setWatermarkEnabled(event.target.checked)} /><span><strong>Exibir marca d'água</strong><small>Desmarque para remover a marca dos conteúdos selecionados.</small></span></label>
               {watermarkEnabled ? (
                 <>
+                  {watermarkTemplates.length ? (
+                    <div className="watermark-reuse-card">
+                      <span><strong>Reutilizar marca d'água existente</strong><small>Escolha uma configuração já aplicada sem importar a logo novamente.</small></span>
+                      <select
+                        value={selectedWatermarkTemplateId}
+                        onChange={(event) => {
+                          const template = watermarkTemplates.find((item) => item.id === event.target.value);
+                          if (template) fillFromTemplate(template);
+                          else setSelectedWatermarkTemplateId("");
+                        }}
+                        aria-label="Marca d'água existente"
+                      >
+                        <option value="">Escolha uma configuração</option>
+                        {watermarkTemplates.map((template) => (
+                          <option key={template.id} value={template.id}>{template.label} ({template.sourceCount} conteúdo{template.sourceCount === 1 ? "" : "s"})</option>
+                        ))}
+                      </select>
+                    </div>
+                  ) : null}
                   <div className="business-prefill-row"><div><Building2 size={17} /><span><strong>Dados da empresa</strong><small>{loadingDefaults ? "Carregando cadastro..." : business ? "Informações encontradas no Supabase" : "Cadastro não encontrado"}</small></span></div><button type="button" className="button secondary" disabled={!business} onClick={() => business && fillFromBusiness(business)}>Preencher novamente</button></div>
                   <div className="watermark-fields bulk-watermark-fields">
                     <label>Nome ou marca<input maxLength={80} value={watermarkName} onChange={(event) => setWatermarkName(event.target.value)} /></label>
@@ -337,6 +373,14 @@ export function BulkAppearancePage({
                       </label>
                       <small>JPG, PNG ou WebP, até 10 MB.</small>
                     </div>
+                    <R2LogoPicker
+                      companyId={companyId}
+                      onSelected={(logo) => {
+                        setLogos((current) => [logo, ...current.filter((item) => item.id !== logo.id)]);
+                        setWatermarkLogoMediaId(logo.id);
+                        setWatermarkLogoUrl("");
+                      }}
+                    />
                     <label>
                       URL HTTPS do logo
                       <input type="url" maxLength={2048} value={watermarkLogoUrl} onChange={(event) => { setWatermarkLogoMediaId(null); setWatermarkLogoUrl(event.target.value); }} placeholder="https://site.com/logo.png" />

@@ -3,23 +3,14 @@ import { Check, Copy, LoaderCircle, Play, Sparkles, Upload } from "lucide-react"
 import type { TvImageFit, TvMediaRecord, TvTransitionType } from "../hooks/useTvData";
 import { supabase } from "../services/supabase";
 import { uploadWatermarkLogo } from "../services/watermarkLogo";
+import { R2LogoPicker } from "./R2LogoPicker";
 import { transitionOptions } from "./presentationOptions";
+import type { WatermarkTemplate } from "./watermarkTemplates";
 
 export interface PresentationSettings {
   transitionType: TvTransitionType;
   transitionDurationMs: number;
   watermarkEnabled: boolean;
-  watermarkName: string;
-  watermarkLogoMediaId: string | null;
-  watermarkLogoUrl: string;
-  watermarkPhone: string;
-  watermarkExtraText: string;
-}
-
-export interface WatermarkTemplate {
-  id: string;
-  label: string;
-  sourceCount: number;
   watermarkName: string;
   watermarkLogoMediaId: string | null;
   watermarkLogoUrl: string;
@@ -57,7 +48,7 @@ export function PresentationSettingsFields({
     let active = true;
     void supabase
       .from("tv_media")
-      .select("id,title,media_type,media_url,message_text,duration_seconds,public_url,storage_provider")
+      .select("id,title,media_type,media_url,message_text,duration_seconds,public_url,storage_provider,storage_key,file_size,r2_asset_id,created_at")
       .eq("company_id", companyId)
       .eq("media_type", "image")
       .eq("is_active", true)
@@ -101,11 +92,15 @@ export function PresentationSettingsFields({
   const reuseWatermark = (templateId: string) => {
     const template = watermarkTemplates.find((item) => item.id === templateId);
     if (!template) return;
+    const matchingLogo = logos.find((logo) =>
+      logo.id === template.watermarkLogoMediaId ||
+      Boolean(template.watermarkLogoUrl && (logo.public_url === template.watermarkLogoUrl || logo.media_url === template.watermarkLogoUrl)),
+    );
     update({
       watermarkEnabled: true,
       watermarkName: template.watermarkName,
-      watermarkLogoMediaId: template.watermarkLogoMediaId,
-      watermarkLogoUrl: template.watermarkLogoUrl,
+      watermarkLogoMediaId: matchingLogo?.id ?? template.watermarkLogoMediaId,
+      watermarkLogoUrl: matchingLogo ? matchingLogo.public_url ?? matchingLogo.media_url ?? template.watermarkLogoUrl : template.watermarkLogoUrl,
       watermarkPhone: template.watermarkPhone,
       watermarkExtraText: template.watermarkExtraText,
     });
@@ -218,6 +213,13 @@ export function PresentationSettingsFields({
                   </label>
                   <small>JPG, PNG ou WebP, até 10 MB. A imagem será salva no R2 da empresa.</small>
                 </div>
+                <R2LogoPicker
+                  companyId={companyId}
+                  onSelected={(logo) => {
+                    setLogos((current) => [logo, ...current.filter((item) => item.id !== logo.id)]);
+                    update({ watermarkLogoMediaId: logo.id, watermarkLogoUrl: logo.public_url ?? logo.media_url ?? "" });
+                  }}
+                />
                 <div className="logo-picker-grid">
                   <button
                     type="button"

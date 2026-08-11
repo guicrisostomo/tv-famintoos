@@ -22,12 +22,44 @@ export async function uploadWatermarkLogo(companyId: string, file: File) {
     10,
     "none",
   );
+  return loadLogoMedia(companyId, mediaId);
+}
+
+export async function importStoredWatermarkLogo(companyId: string, storageKey: string, title: string) {
+  const mediaId = await importR2Object(storageKey, title.replace(/\.[^.]+$/, "") || "Logo da empresa", 10, "none");
+  return loadLogoMedia(companyId, mediaId);
+}
+
+export async function resolveWatermarkLogo(companyId: string, mediaId: string | null, value: string) {
+  if (mediaId) return loadLogoMedia(companyId, mediaId);
+  const url = value.trim();
+  if (!url) return null;
+  if (!supabase) throw new Error("Supabase não configurado.");
+  for (const field of ["public_url", "media_url"] as const) {
+    const { data, error } = await supabase
+      .from("tv_media")
+      .select(logoSelect)
+      .eq("company_id", companyId)
+      .eq("media_type", "image")
+      .eq("is_active", true)
+      .eq(field, url)
+      .limit(1)
+      .maybeSingle();
+    if (error) throw error;
+    if (data) return data as TvMediaRecord;
+  }
+  return importWatermarkLogoUrl(companyId, url);
+}
+
+async function loadLogoMedia(companyId: string, mediaId: string) {
+  if (!supabase) throw new Error("Supabase não configurado.");
   const { data, error } = await supabase
     .from("tv_media")
     .select(logoSelect)
     .eq("id", mediaId)
     .eq("company_id", companyId)
     .eq("media_type", "image")
+    .eq("is_active", true)
     .single();
   if (error) throw error;
   return data as TvMediaRecord;
