@@ -33,11 +33,31 @@ export function TvMediaStage({
   const isVideo = item.media.type === "video" && Boolean(url);
   const mediaFit = isVideo && item.fit === "blur_background" ? "contain" : item.fit;
   const sessionKey = `${item.id}:${playbackRun}`;
+  const transitionType = item.transition?.type ?? "none";
+  const transitionDurationMs = item.transition?.durationMs ?? 700;
   const attachedVideo = useRef<HTMLVideoElement | null>(null);
   const sourceUrl = useRef("");
   const activeSession = useRef("");
   const positionedSession = useRef("");
   const playingSession = useRef("");
+  const stageRef = useRef<HTMLDivElement | null>(null);
+  const transitionCurtainRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const stage = stageRef.current;
+    if (!stage || !playbackEnabled || transitionType === "none") return;
+    const target = isVideo ? transitionCurtainRef.current : stage;
+    if (!target || typeof target.animate !== "function") return;
+    const animation = target.animate(
+      isVideo ? videoTransitionFrames(transitionType) : transitionFrames(transitionType),
+      {
+        duration: Math.max(200, Math.min(2500, transitionDurationMs)),
+        easing: "cubic-bezier(.22, 1, .36, 1)",
+        fill: "both",
+      },
+    );
+    return () => animation.cancel();
+  }, [isVideo, playbackEnabled, sessionKey, transitionDurationMs, transitionType]);
 
   const attachVideo = useCallback(
     (video: HTMLVideoElement | null) => {
@@ -178,6 +198,7 @@ export function TvMediaStage({
 
   return (
     <div
+      ref={stageRef}
       className={`media-layer${isVideo ? " media-layer-video" : ""}`}
       style={{ "--media-fit": mediaFit } as React.CSSProperties}
     >
@@ -226,14 +247,72 @@ export function TvMediaStage({
       {item.overlayText ? (
         <div className={`media-caption caption-${item.overlayAnimation ?? "none"}`}>{item.overlayText}</div>
       ) : null}
+      {item.watermark?.enabled ? (
+        <div className="tv-watermark">
+          {item.watermark.logoUrl ? <img src={item.watermark.logoUrl} alt="" /> : null}
+          <div>
+            {item.watermark.name ? <strong>{item.watermark.name}</strong> : null}
+            {item.watermark.extraText ? <span>{item.watermark.extraText}</span> : null}
+          </div>
+          {item.watermark.phone ? <b>{item.watermark.phone}</b> : null}
+        </div>
+      ) : null}
       {item.qrCodeUrl ? (
         <div className="qr-overlay">
           <QRCodeSVG value={item.qrCodeUrl} size={128} />
           <small>Aponte a câmera</small>
         </div>
       ) : null}
+      <div ref={transitionCurtainRef} className="transition-curtain" aria-hidden="true" />
     </div>
   );
+}
+
+function videoTransitionFrames(type: NonNullable<ProgramItem["transition"]>["type"]): Keyframe[] {
+  switch (type) {
+    case "slide_left":
+      return [{ opacity: 1, transform: "translate3d(0,0,0)" }, { opacity: 1, transform: "translate3d(-102%,0,0)" }];
+    case "slide_up":
+      return [{ opacity: 1, transform: "translate3d(0,0,0)" }, { opacity: 1, transform: "translate3d(0,-102%,0)" }];
+    case "zoom":
+      return [{ opacity: 1, transform: "scale(1)" }, { opacity: 0, transform: "scale(1.18)" }];
+    case "wipe":
+      return [{ opacity: 1, clipPath: "inset(0 0 0 0)" }, { opacity: 1, clipPath: "inset(0 0 0 100%)" }];
+    default:
+      return [{ opacity: 1 }, { opacity: 0 }];
+  }
+}
+
+function transitionFrames(type: NonNullable<ProgramItem["transition"]>["type"]): Keyframe[] {
+  switch (type) {
+    case "slide_left":
+      return [
+        { opacity: 0.15, transform: "translate3d(7%, 0, 0) scale(1.015)", filter: "blur(5px)" },
+        { opacity: 1, transform: "translate3d(0, 0, 0) scale(1)", filter: "blur(0)" },
+      ];
+    case "slide_up":
+      return [
+        { opacity: 0.15, transform: "translate3d(0, 7%, 0) scale(1.02)", filter: "blur(4px)" },
+        { opacity: 1, transform: "translate3d(0, 0, 0) scale(1)", filter: "blur(0)" },
+      ];
+    case "zoom":
+      return [
+        { opacity: 0.1, transform: "scale(1.09)", filter: "blur(7px) brightness(.72)" },
+        { opacity: 1, transform: "scale(1)", filter: "blur(0) brightness(1)" },
+      ];
+    case "wipe":
+      return [
+        { opacity: 0.55, clipPath: "inset(0 100% 0 0)", filter: "brightness(1.35)" },
+        { opacity: 1, clipPath: "inset(0 0 0 0)", filter: "brightness(1)" },
+      ];
+    case "fade":
+      return [
+        { opacity: 0, filter: "blur(5px) brightness(.68)" },
+        { opacity: 1, filter: "blur(0) brightness(1)" },
+      ];
+    default:
+      return [{ opacity: 1 }, { opacity: 1 }];
+  }
 }
 
 function videoPlaybackError(video: HTMLVideoElement, item: ProgramItem) {

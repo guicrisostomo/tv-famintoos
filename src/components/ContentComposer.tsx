@@ -26,6 +26,7 @@ import {
 } from "../services/storage";
 import { supabase } from "../services/supabase";
 import { SoundPicker, type SoundSettings } from "./SoundPicker";
+import { PresentationSettingsFields, type PresentationSettings } from "./PresentationSettingsFields";
 import { ContentScheduleFields } from "./ContentScheduleFields";
 import { alwaysSchedule, scheduleDatabaseValues, type ContentSchedule } from "./contentSchedule";
 
@@ -164,6 +165,15 @@ export function ContentComposer({
   const [saved, setSaved] = useState(false);
   const [activeTab, setActiveTab] = useState<"content" | "schedule" | "tvs">("content");
   const [sound, setSound] = useState<SoundSettings>({ mediaId: null, media: null, volume: .7, loop: true, muteOriginalAudio: false });
+  const [presentation, setPresentation] = useState<PresentationSettings>({
+    transitionType: "fade",
+    transitionDurationMs: 700,
+    watermarkEnabled: false,
+    watermarkName: "",
+    watermarkLogoMediaId: null,
+    watermarkPhone: "",
+    watermarkExtraText: "",
+  });
   const [schedule, setSchedule] = useState<ContentSchedule>(alwaysSchedule);
   const selectedNames = useMemo(
     () =>
@@ -325,6 +335,16 @@ export function ContentComposer({
       setError("Digite o texto que será exibido.");
       return;
     }
+    if (
+      presentation.watermarkEnabled &&
+      !presentation.watermarkLogoMediaId &&
+      !presentation.watermarkName.trim() &&
+      !presentation.watermarkPhone.trim() &&
+      !presentation.watermarkExtraText.trim()
+    ) {
+      setError("Informe ao menos um dado para a marca d'água.");
+      return;
+    }
     setSaving(true);
     setError(null);
     try {
@@ -447,6 +467,13 @@ export function ContentComposer({
         sound_volume: sound.volume,
         sound_loop: sound.loop,
         mute_original_audio: type === "video" && sound.mediaId ? sound.muteOriginalAudio : false,
+        transition_type: presentation.transitionType,
+        transition_duration_ms: presentation.transitionDurationMs,
+        watermark_enabled: presentation.watermarkEnabled,
+        watermark_name: presentation.watermarkEnabled ? presentation.watermarkName.trim() || null : null,
+        watermark_logo_media_id: presentation.watermarkEnabled ? presentation.watermarkLogoMediaId : null,
+        watermark_phone: presentation.watermarkEnabled ? presentation.watermarkPhone.trim() || null : null,
+        watermark_extra_text: presentation.watermarkEnabled ? presentation.watermarkExtraText.trim() || null : null,
       }));
       const { error: playlistError } = await supabase
         .from("tv_playlist_items")
@@ -866,6 +893,17 @@ export function ContentComposer({
                   required
                 />
               </label>
+              <PresentationSettingsFields
+                companyId={companyId}
+                value={presentation}
+                onChange={setPresentation}
+                preview={{
+                  type,
+                  url: previewUrl,
+                  message: message.trim() || title.trim(),
+                  fit: imageFit,
+                }}
+              />
             </div></div>
             <div className="form-tab-panel editor-form" hidden={activeTab !== "schedule"}>
               <ContentScheduleFields value={schedule} onChange={setSchedule}/>

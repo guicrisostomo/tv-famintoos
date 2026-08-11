@@ -9,6 +9,7 @@ import type {
 } from "../hooks/useTvData";
 import { supabase } from "../services/supabase";
 import { SoundPicker, type SoundSettings } from "./SoundPicker";
+import { PresentationSettingsFields, type PresentationSettings } from "./PresentationSettingsFields";
 import { ContentScheduleFields } from "./ContentScheduleFields";
 import { scheduleDatabaseValues, type ContentSchedule } from "./contentSchedule";
 
@@ -49,6 +50,15 @@ export function EditProgrammingItem({
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"content" | "schedule" | "tvs">("content");
   const [sound, setSound] = useState<SoundSettings>({ mediaId: item.sound_media_id ?? null, media: item.sound_media ?? null, volume: item.sound_volume ?? .7, loop: item.sound_loop ?? true, muteOriginalAudio: item.mute_original_audio ?? false });
+  const [presentation, setPresentation] = useState<PresentationSettings>({
+    transitionType: item.transition_type ?? "fade",
+    transitionDurationMs: item.transition_duration_ms ?? 700,
+    watermarkEnabled: item.watermark_enabled ?? false,
+    watermarkName: item.watermark_name ?? "",
+    watermarkLogoMediaId: item.watermark_logo_media_id ?? null,
+    watermarkPhone: item.watermark_phone ?? "",
+    watermarkExtraText: item.watermark_extra_text ?? "",
+  });
   const [schedule, setSchedule] = useState<ContentSchedule>(() => ({
     mode: item.media.starts_at || item.media.ends_at || item.media.start_time || item.media.end_time || item.media.weekdays?.length ? "scheduled" : "always",
     startsAt: item.media.starts_at?.slice(0, 10) ?? "", endsAt: item.media.ends_at?.slice(0, 10) ?? "",
@@ -75,6 +85,16 @@ export function EditProgrammingItem({
     }
     if (item.media.media_type === "message" && !message.trim()) {
       setError("Informe o texto que será exibido.");
+      return;
+    }
+    if (
+      presentation.watermarkEnabled &&
+      !presentation.watermarkLogoMediaId &&
+      !presentation.watermarkName.trim() &&
+      !presentation.watermarkPhone.trim() &&
+      !presentation.watermarkExtraText.trim()
+    ) {
+      setError("Informe ao menos um dado para a marca d'água.");
       return;
     }
     setSaving(true);
@@ -117,6 +137,13 @@ export function EditProgrammingItem({
             sound_volume: sound.volume,
             sound_loop: sound.loop,
             mute_original_audio: item.media.media_type === "video" && sound.mediaId ? sound.muteOriginalAudio : false,
+            transition_type: presentation.transitionType,
+            transition_duration_ms: presentation.transitionDurationMs,
+            watermark_enabled: presentation.watermarkEnabled,
+            watermark_name: presentation.watermarkEnabled ? presentation.watermarkName.trim() || null : null,
+            watermark_logo_media_id: presentation.watermarkEnabled ? presentation.watermarkLogoMediaId : null,
+            watermark_phone: presentation.watermarkEnabled ? presentation.watermarkPhone.trim() || null : null,
+            watermark_extra_text: presentation.watermarkEnabled ? presentation.watermarkExtraText.trim() || null : null,
           })
           .eq("company_id", companyId)
           .in(
@@ -175,6 +202,13 @@ export function EditProgrammingItem({
               sound_volume: sound.volume,
               sound_loop: sound.loop,
               mute_original_audio: item.media.media_type === "video" && sound.mediaId ? sound.muteOriginalAudio : false,
+              transition_type: presentation.transitionType,
+              transition_duration_ms: presentation.transitionDurationMs,
+              watermark_enabled: presentation.watermarkEnabled,
+              watermark_name: presentation.watermarkEnabled ? presentation.watermarkName.trim() || null : null,
+              watermark_logo_media_id: presentation.watermarkEnabled ? presentation.watermarkLogoMediaId : null,
+              watermark_phone: presentation.watermarkEnabled ? presentation.watermarkPhone.trim() || null : null,
+              watermark_extra_text: presentation.watermarkEnabled ? presentation.watermarkExtraText.trim() || null : null,
               position: (maxPositions.get(displayId) ?? -1) + 1,
               is_active: true,
             })),
@@ -346,6 +380,17 @@ export function EditProgrammingItem({
               </div>
             ) : null}
             <SoundPicker companyId={companyId} value={sound} isVideo={item.media.media_type === "video"} onChange={setSound} />
+            <PresentationSettingsFields
+              companyId={companyId}
+              value={presentation}
+              onChange={setPresentation}
+              preview={{
+                type: item.media.media_type === "image" ? "image" : item.media.media_type === "video" ? "video" : "message",
+                url,
+                message: message.trim() || title.trim(),
+                fit: imageFit,
+              }}
+            />
           </div>
           <div className="form-tab-panel editor-form" hidden={activeTab !== "schedule"}>
             <ContentScheduleFields value={schedule} onChange={setSchedule}/>

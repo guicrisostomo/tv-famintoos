@@ -30,7 +30,11 @@ export function PreviewPanel({ items }: { items: TvPlaylistRecord[] }) {
             : "Sem itens"}
         </span>
       </div>
-      <div className="preview">
+      <div
+        key={`${currentItem?.id ?? "empty"}-${index}`}
+        className={`preview transition-preview-${currentItem?.transition_type ?? "none"}`}
+        style={{ "--transition-duration": `${currentItem?.transition_duration_ms ?? 700}ms` } as React.CSSProperties}
+      >
         {!current ? (
           <div className="preview-placeholder">
             Tela preta
@@ -60,6 +64,18 @@ export function PreviewPanel({ items }: { items: TvPlaylistRecord[] }) {
         {current && current.media_type !== "message" && currentItem.caption_text ? (
           <div className={`media-caption preview-caption caption-${currentItem.caption_animation ?? "none"}`}>
             {currentItem.caption_text}
+          </div>
+        ) : null}
+        {currentItem?.watermark_enabled ? (
+          <div className="tv-watermark preview-watermark">
+            {currentItem.watermark_logo && (currentItem.watermark_logo.public_url || currentItem.watermark_logo.media_url) ? (
+              <img src={currentItem.watermark_logo.public_url ?? currentItem.watermark_logo.media_url ?? undefined} alt="" />
+            ) : null}
+            <div>
+              {currentItem.watermark_name ? <strong>{currentItem.watermark_name}</strong> : null}
+              {currentItem.watermark_extra_text ? <span>{currentItem.watermark_extra_text}</span> : null}
+            </div>
+            {currentItem.watermark_phone ? <b>{currentItem.watermark_phone}</b> : null}
           </div>
         ) : null}
       </div>

@@ -1,6 +1,7 @@
 export type MediaType = 'image' | 'video' | 'message' | 'qr_code' | 'audio'
 export type StorageProvider = 'cloudflare_r2' | 'supabase_storage' | 'external_url'
 export type InterruptionKind = 'call' | 'urgent_notice' | 'campaign'
+export type TvTransitionType = 'none' | 'fade' | 'slide_left' | 'slide_up' | 'zoom' | 'wipe'
 
 export interface TvMedia {
   id: string
@@ -29,6 +30,14 @@ export interface ProgramItem {
   active: boolean
   overlayText?: string | null
   overlayAnimation?: 'none' | 'fade' | 'slide_up' | 'pulse'
+  transition?: { type: TvTransitionType; durationMs: number }
+  watermark?: {
+    enabled: boolean
+    name?: string | null
+    logoUrl?: string | null
+    phone?: string | null
+    extraText?: string | null
+  }
   soundtrack?: { id: string; title?: string | null; url: string; volume: number; loop: boolean; muteOriginalAudio: boolean } | null
   qrCodeUrl?: string | null
 }
