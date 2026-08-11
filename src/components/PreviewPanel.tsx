@@ -67,7 +67,7 @@ export function PreviewPanel({ items }: { items: TvPlaylistRecord[] }) {
           </div>
         ) : null}
         {currentItem?.watermark_enabled ? (
-          <div className="tv-watermark preview-watermark">
+          <div className="tv-watermark tv-watermark-top preview-watermark">
             {(currentItem.watermark_logo?.public_url || currentItem.watermark_logo?.media_url || currentItem.watermark_logo_url) ? (
               <img src={currentItem.watermark_logo?.public_url ?? currentItem.watermark_logo?.media_url ?? currentItem.watermark_logo_url ?? undefined} alt="" />
             ) : null}

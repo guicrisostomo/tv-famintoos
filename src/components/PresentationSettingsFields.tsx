@@ -230,7 +230,7 @@ export function PresentationSettingsFields({
             <div className="presentation-preview-message">{preview.message || "Seu conteúdo"}</div>
           )}
           {value.watermarkEnabled ? (
-            <div className="tv-watermark preview-watermark">
+            <div className="tv-watermark tv-watermark-top preview-watermark">
               {logoUrl ? <img src={logoUrl} alt="" /> : null}
               <div>
                 {value.watermarkName ? <strong>{value.watermarkName}</strong> : null}

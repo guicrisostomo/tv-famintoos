@@ -282,7 +282,7 @@ export function TvMediaStage({
         <div className={`media-caption caption-${item.overlayAnimation ?? "none"}`}>{item.overlayText}</div>
       ) : null}
       {item.watermark?.enabled ? (
-        <div className="tv-watermark">
+        <div className="tv-watermark tv-watermark-top">
           {watermarkLogoUrl ? (
             <img
               src={watermarkLogoUrl}
