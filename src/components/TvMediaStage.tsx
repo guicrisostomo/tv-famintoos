@@ -3,6 +3,7 @@ import { QRCodeSVG } from "qrcode.react";
 import type { ProgramItem } from "../domain/tv";
 import { playVideoElement, resolveMediaUrl } from "../services/media";
 import { tvAudioService } from "../services/tvAudioService";
+import { WatermarkOverlay } from "./WatermarkOverlay";
 
 interface TvMediaStageProps {
   item: ProgramItem;
@@ -282,20 +283,14 @@ export function TvMediaStage({
         <div className={`media-caption caption-${item.overlayAnimation ?? "none"}`}>{item.overlayText}</div>
       ) : null}
       {item.watermark?.enabled ? (
-        <div className="tv-watermark tv-watermark-top">
-          {watermarkLogoUrl ? (
-            <img
-              src={watermarkLogoUrl}
-              alt=""
-              referrerPolicy="no-referrer"
-            />
-          ) : null}
-          <div>
-            {item.watermark.name ? <strong>{item.watermark.name}</strong> : null}
-            {item.watermark.extraText ? <span>{item.watermark.extraText}</span> : null}
-          </div>
-          {item.watermark.phone ? <b>{item.watermark.phone}</b> : null}
-        </div>
+        <WatermarkOverlay
+          logoUrl={watermarkLogoUrl}
+          name={item.watermark.name}
+          extraText={item.watermark.extraText}
+          phone={item.watermark.phone}
+          qrEnabled={item.watermark.qrEnabled}
+          qrValue={item.watermark.qrValue}
+        />
       ) : null}
       {item.qrCodeUrl ? (
         <div className="qr-overlay">

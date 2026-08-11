@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
-import { Check, Copy, LoaderCircle, Play, Sparkles, Upload } from "lucide-react";
+import { Check, Copy, LoaderCircle, Play, QrCode, Sparkles, Upload } from "lucide-react";
 import type { TvImageFit, TvMediaRecord, TvTransitionType } from "../hooks/useTvData";
 import { supabase } from "../services/supabase";
 import { uploadWatermarkLogo } from "../services/watermarkLogo";
 import { R2LogoPicker } from "./R2LogoPicker";
 import { transitionOptions } from "./presentationOptions";
+import { WatermarkOverlay } from "./WatermarkOverlay";
 import type { WatermarkTemplate } from "./watermarkTemplates";
 
 export interface PresentationSettings {
@@ -16,6 +17,8 @@ export interface PresentationSettings {
   watermarkLogoUrl: string;
   watermarkPhone: string;
   watermarkExtraText: string;
+  watermarkQrEnabled: boolean;
+  watermarkQrValue: string;
 }
 
 interface PresentationPreview {
@@ -103,6 +106,8 @@ export function PresentationSettingsFields({
       watermarkLogoUrl: matchingLogo ? matchingLogo.public_url ?? matchingLogo.media_url ?? template.watermarkLogoUrl : template.watermarkLogoUrl,
       watermarkPhone: template.watermarkPhone,
       watermarkExtraText: template.watermarkExtraText,
+      watermarkQrEnabled: template.watermarkQrEnabled,
+      watermarkQrValue: template.watermarkQrValue,
     });
   };
 
@@ -195,6 +200,29 @@ export function PresentationSettingsFields({
                 Informação complementar
                 <input maxLength={160} value={value.watermarkExtraText} onChange={(event) => update({ watermarkExtraText: event.target.value })} placeholder="Site, endereço, slogan ou rede social" />
               </label>
+              <div className="watermark-qr-settings">
+                <label className="watermark-toggle watermark-qr-toggle">
+                  <input
+                    type="checkbox"
+                    checked={value.watermarkQrEnabled}
+                    onChange={(event) => update({ watermarkQrEnabled: event.target.checked })}
+                  />
+                  <span><QrCode size={18} /><strong>Adicionar QR Code</strong><small>O código será exibido dentro da marca d'água.</small></span>
+                </label>
+                {value.watermarkQrEnabled ? (
+                  <label>
+                    Conteúdo do QR Code
+                    <input
+                      type="text"
+                      maxLength={2048}
+                      value={value.watermarkQrValue}
+                      onChange={(event) => update({ watermarkQrValue: event.target.value })}
+                      placeholder="https://seusite.com/cardapio"
+                    />
+                    <small>Informe um site, cardápio, WhatsApp, PIX ou outro texto. A prévia é gerada automaticamente.</small>
+                  </label>
+                ) : null}
+              </div>
               <fieldset className="logo-picker">
                 <legend>Logo</legend>
                 <div className="logo-upload-row">
@@ -274,14 +302,15 @@ export function PresentationSettingsFields({
             <div className="presentation-preview-message">{preview.message || "Seu conteúdo"}</div>
           )}
           {value.watermarkEnabled ? (
-            <div className="tv-watermark tv-watermark-top preview-watermark">
-              {logoUrl ? <img src={logoUrl} alt="" /> : null}
-              <div>
-                {value.watermarkName ? <strong>{value.watermarkName}</strong> : null}
-                {value.watermarkExtraText ? <span>{value.watermarkExtraText}</span> : null}
-              </div>
-              {value.watermarkPhone ? <b>{value.watermarkPhone}</b> : null}
-            </div>
+            <WatermarkOverlay
+              className="preview-watermark"
+              logoUrl={logoUrl}
+              name={value.watermarkName}
+              extraText={value.watermarkExtraText}
+              phone={value.watermarkPhone}
+              qrEnabled={value.watermarkQrEnabled}
+              qrValue={value.watermarkQrValue}
+            />
           ) : null}
         </div>
         <button type="button" className="button secondary presentation-replay" onClick={() => setPreviewRun((run) => run + 1)}>

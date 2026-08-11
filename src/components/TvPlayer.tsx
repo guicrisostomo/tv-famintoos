@@ -218,6 +218,8 @@ export function TvPlayer({ companyId, displayId }: { companyId: string; displayI
             logoUrl: item.watermark_logo?.public_url ?? item.watermark_logo?.media_url ?? item.watermark_logo_url,
             phone: item.watermark_phone,
             extraText: item.watermark_extra_text,
+            qrEnabled: item.watermark_qr_enabled ?? false,
+            qrValue: item.watermark_qr_value,
           },
           soundtrack:
             item.sound_media && (item.sound_media.public_url || item.sound_media.media_url)

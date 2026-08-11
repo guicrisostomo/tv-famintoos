@@ -37,6 +37,8 @@ export interface ProgramItem {
     logoUrl?: string | null
     phone?: string | null
     extraText?: string | null
+    qrEnabled?: boolean
+    qrValue?: string | null
   }
   soundtrack?: { id: string; title?: string | null; url: string; volume: number; loop: boolean; muteOriginalAudio: boolean } | null
   qrCodeUrl?: string | null

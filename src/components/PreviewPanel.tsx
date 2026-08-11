@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Download, Pause, Play, SkipForward } from "lucide-react";
 import type { TvPlaylistRecord } from "../hooks/useTvData";
+import { WatermarkOverlay } from "./WatermarkOverlay";
 
 export function PreviewPanel({ items }: { items: TvPlaylistRecord[] }) {
   const [index, setIndex] = useState(0);
@@ -67,16 +68,15 @@ export function PreviewPanel({ items }: { items: TvPlaylistRecord[] }) {
           </div>
         ) : null}
         {currentItem?.watermark_enabled ? (
-          <div className="tv-watermark tv-watermark-top preview-watermark">
-            {(currentItem.watermark_logo?.public_url || currentItem.watermark_logo?.media_url || currentItem.watermark_logo_url) ? (
-              <img src={currentItem.watermark_logo?.public_url ?? currentItem.watermark_logo?.media_url ?? currentItem.watermark_logo_url ?? undefined} alt="" />
-            ) : null}
-            <div>
-              {currentItem.watermark_name ? <strong>{currentItem.watermark_name}</strong> : null}
-              {currentItem.watermark_extra_text ? <span>{currentItem.watermark_extra_text}</span> : null}
-            </div>
-            {currentItem.watermark_phone ? <b>{currentItem.watermark_phone}</b> : null}
-          </div>
+          <WatermarkOverlay
+            className="preview-watermark"
+            logoUrl={currentItem.watermark_logo?.public_url ?? currentItem.watermark_logo?.media_url ?? currentItem.watermark_logo_url}
+            name={currentItem.watermark_name}
+            extraText={currentItem.watermark_extra_text}
+            phone={currentItem.watermark_phone}
+            qrEnabled={currentItem.watermark_qr_enabled}
+            qrValue={currentItem.watermark_qr_value}
+          />
         ) : null}
       </div>
       <div className="preview-actions">

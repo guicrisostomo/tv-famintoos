@@ -9,6 +9,8 @@ export interface WatermarkTemplate {
   watermarkLogoUrl: string;
   watermarkPhone: string;
   watermarkExtraText: string;
+  watermarkQrEnabled: boolean;
+  watermarkQrValue: string;
 }
 
 export function buildWatermarkTemplates(items: TvPlaylistRecord[]): WatermarkTemplate[] {
@@ -28,6 +30,8 @@ export function buildWatermarkTemplates(items: TvPlaylistRecord[]): WatermarkTem
         "",
       watermarkPhone: item.watermark_phone ?? "",
       watermarkExtraText: item.watermark_extra_text ?? "",
+      watermarkQrEnabled: item.watermark_qr_enabled ?? false,
+      watermarkQrValue: item.watermark_qr_value ?? "",
     };
     const signature = JSON.stringify(template);
     const existing = templates.get(signature);

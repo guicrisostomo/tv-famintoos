@@ -176,6 +176,8 @@ export function ContentComposer({
     watermarkLogoUrl: "",
     watermarkPhone: "",
     watermarkExtraText: "",
+    watermarkQrEnabled: false,
+    watermarkQrValue: "",
   });
   const watermarkTemplates = useMemo(() => buildWatermarkTemplates(items), [items]);
   const [schedule, setSchedule] = useState<ContentSchedule>(alwaysSchedule);
@@ -343,13 +345,18 @@ export function ContentComposer({
       setError("A URL do logo precisa começar com https://.");
       return;
     }
+    if (presentation.watermarkEnabled && presentation.watermarkQrEnabled && !presentation.watermarkQrValue.trim()) {
+      setError("Informe o conteúdo que será transformado em QR Code.");
+      return;
+    }
     if (
       presentation.watermarkEnabled &&
       !presentation.watermarkLogoMediaId &&
       !presentation.watermarkLogoUrl.trim() &&
       !presentation.watermarkName.trim() &&
       !presentation.watermarkPhone.trim() &&
-      !presentation.watermarkExtraText.trim()
+      !presentation.watermarkExtraText.trim() &&
+      !(presentation.watermarkQrEnabled && presentation.watermarkQrValue.trim())
     ) {
       setError("Informe ao menos um dado para a marca d'água.");
       return;
@@ -492,6 +499,8 @@ export function ContentComposer({
         watermark_logo_url: presentation.watermarkEnabled ? resolvedWatermarkLogoUrl || null : null,
         watermark_phone: presentation.watermarkEnabled ? presentation.watermarkPhone.trim() || null : null,
         watermark_extra_text: presentation.watermarkEnabled ? presentation.watermarkExtraText.trim() || null : null,
+        watermark_qr_enabled: presentation.watermarkEnabled && presentation.watermarkQrEnabled,
+        watermark_qr_value: presentation.watermarkEnabled && presentation.watermarkQrEnabled ? presentation.watermarkQrValue.trim() || null : null,
       }));
       const { error: playlistError } = await supabase
         .from("tv_playlist_items")

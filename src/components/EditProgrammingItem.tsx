@@ -60,6 +60,8 @@ export function EditProgrammingItem({
     watermarkLogoUrl: item.watermark_logo_url ?? "",
     watermarkPhone: item.watermark_phone ?? "",
     watermarkExtraText: item.watermark_extra_text ?? "",
+    watermarkQrEnabled: item.watermark_qr_enabled ?? false,
+    watermarkQrValue: item.watermark_qr_value ?? "",
   });
   const [schedule, setSchedule] = useState<ContentSchedule>(() => ({
     mode: item.media.starts_at || item.media.ends_at || item.media.start_time || item.media.end_time || item.media.weekdays?.length ? "scheduled" : "always",
@@ -93,13 +95,18 @@ export function EditProgrammingItem({
       setError("A URL do logo precisa começar com https://.");
       return;
     }
+    if (presentation.watermarkEnabled && presentation.watermarkQrEnabled && !presentation.watermarkQrValue.trim()) {
+      setError("Informe o conteúdo que será transformado em QR Code.");
+      return;
+    }
     if (
       presentation.watermarkEnabled &&
       !presentation.watermarkLogoMediaId &&
       !presentation.watermarkLogoUrl.trim() &&
       !presentation.watermarkName.trim() &&
       !presentation.watermarkPhone.trim() &&
-      !presentation.watermarkExtraText.trim()
+      !presentation.watermarkExtraText.trim() &&
+      !(presentation.watermarkQrEnabled && presentation.watermarkQrValue.trim())
     ) {
       setError("Informe ao menos um dado para a marca d'água.");
       return;
@@ -160,6 +167,8 @@ export function EditProgrammingItem({
             watermark_logo_url: presentation.watermarkEnabled ? resolvedWatermarkLogoUrl || null : null,
             watermark_phone: presentation.watermarkEnabled ? presentation.watermarkPhone.trim() || null : null,
             watermark_extra_text: presentation.watermarkEnabled ? presentation.watermarkExtraText.trim() || null : null,
+            watermark_qr_enabled: presentation.watermarkEnabled && presentation.watermarkQrEnabled,
+            watermark_qr_value: presentation.watermarkEnabled && presentation.watermarkQrEnabled ? presentation.watermarkQrValue.trim() || null : null,
           })
           .eq("company_id", companyId)
           .in(
@@ -226,6 +235,8 @@ export function EditProgrammingItem({
               watermark_logo_url: presentation.watermarkEnabled ? resolvedWatermarkLogoUrl || null : null,
               watermark_phone: presentation.watermarkEnabled ? presentation.watermarkPhone.trim() || null : null,
               watermark_extra_text: presentation.watermarkEnabled ? presentation.watermarkExtraText.trim() || null : null,
+              watermark_qr_enabled: presentation.watermarkEnabled && presentation.watermarkQrEnabled,
+              watermark_qr_value: presentation.watermarkEnabled && presentation.watermarkQrEnabled ? presentation.watermarkQrValue.trim() || null : null,
               position: (maxPositions.get(displayId) ?? -1) + 1,
               is_active: true,
             })),
