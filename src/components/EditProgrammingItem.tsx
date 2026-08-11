@@ -48,7 +48,7 @@ export function EditProgrammingItem({
   );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<"content" | "schedule" | "tvs">("content");
+  const [activeTab, setActiveTab] = useState<"content" | "appearance" | "schedule" | "tvs">("content");
   const [sound, setSound] = useState<SoundSettings>({ mediaId: item.sound_media_id ?? null, media: item.sound_media ?? null, volume: item.sound_volume ?? .7, loop: item.sound_loop ?? true, muteOriginalAudio: item.mute_original_audio ?? false });
   const [presentation, setPresentation] = useState<PresentationSettings>({
     transitionType: item.transition_type ?? "fade",
@@ -231,7 +231,7 @@ export function EditProgrammingItem({
   return (
     <div className="modal-backdrop" role="presentation">
       <section
-        className="composer-modal"
+        className={`composer-modal${activeTab === "appearance" ? " presentation-modal" : ""}`}
         role="dialog"
         aria-modal="true"
         aria-labelledby="edit-content-title"
@@ -251,7 +251,12 @@ export function EditProgrammingItem({
           </button>
         </div>
         <form onSubmit={save} noValidate>
-          <div className="form-tabs" role="tablist" aria-label="Etapas da programação"><button type="button" role="tab" aria-selected={activeTab === "content"} className={activeTab === "content" ? "active" : ""} onClick={() => setActiveTab("content")}>1. Conteúdo</button><button type="button" role="tab" aria-selected={activeTab === "schedule"} className={activeTab === "schedule" ? "active" : ""} onClick={() => setActiveTab("schedule")}>2. Quando exibir</button><button type="button" role="tab" aria-selected={activeTab === "tvs"} className={activeTab === "tvs" ? "active" : ""} onClick={() => setActiveTab("tvs")}>3. TVs</button></div>
+          <div className="form-tabs four" role="tablist" aria-label="Etapas da programação">
+            <button type="button" role="tab" aria-selected={activeTab === "content"} className={activeTab === "content" ? "active" : ""} onClick={() => setActiveTab("content")}>1. Conteúdo</button>
+            <button type="button" role="tab" aria-selected={activeTab === "appearance"} className={activeTab === "appearance" ? "active" : ""} onClick={() => setActiveTab("appearance")}>2. Aparência</button>
+            <button type="button" role="tab" aria-selected={activeTab === "schedule"} className={activeTab === "schedule" ? "active" : ""} onClick={() => setActiveTab("schedule")}>3. Quando exibir</button>
+            <button type="button" role="tab" aria-selected={activeTab === "tvs"} className={activeTab === "tvs" ? "active" : ""} onClick={() => setActiveTab("tvs")}>4. TVs</button>
+          </div>
           <div className="form-tab-panel editor-form" hidden={activeTab !== "content"}>
             {url && item.media.media_type === "image" ? (
               <div className={`image-motion-preview image-fit-${imageFit}`}>
@@ -380,6 +385,8 @@ export function EditProgrammingItem({
               </div>
             ) : null}
             <SoundPicker companyId={companyId} value={sound} isVideo={item.media.media_type === "video"} onChange={setSound} />
+          </div>
+          <div className="form-tab-panel" hidden={activeTab !== "appearance"}>
             <PresentationSettingsFields
               companyId={companyId}
               value={presentation}

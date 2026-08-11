@@ -163,7 +163,7 @@ export function ContentComposer({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
-  const [activeTab, setActiveTab] = useState<"content" | "schedule" | "tvs">("content");
+  const [activeTab, setActiveTab] = useState<"content" | "appearance" | "schedule" | "tvs">("content");
   const [sound, setSound] = useState<SoundSettings>({ mediaId: null, media: null, volume: .7, loop: true, muteOriginalAudio: false });
   const [presentation, setPresentation] = useState<PresentationSettings>({
     transitionType: "fade",
@@ -500,7 +500,7 @@ export function ContentComposer({
   return (
     <div className="modal-backdrop" role="presentation">
       <section
-        className="composer-modal"
+        className={`composer-modal${activeTab === "appearance" ? " presentation-modal" : ""}`}
         role="dialog"
         aria-modal="true"
         aria-labelledby="composer-title"
@@ -543,7 +543,12 @@ export function ContentComposer({
           </div>
         ) : (
           <form onSubmit={submit} noValidate>
-            <div className="form-tabs" role="tablist" aria-label="Etapas do conteúdo"><button type="button" role="tab" aria-selected={activeTab === "content"} className={activeTab === "content" ? "active" : ""} onClick={() => setActiveTab("content")}>1. Conteúdo</button><button type="button" role="tab" aria-selected={activeTab === "schedule"} className={activeTab === "schedule" ? "active" : ""} onClick={() => setActiveTab("schedule")}>2. Quando exibir</button><button type="button" role="tab" aria-selected={activeTab === "tvs"} className={activeTab === "tvs" ? "active" : ""} onClick={() => setActiveTab("tvs")}>3. TVs</button></div>
+            <div className="form-tabs four" role="tablist" aria-label="Etapas do conteúdo">
+              <button type="button" role="tab" aria-selected={activeTab === "content"} className={activeTab === "content" ? "active" : ""} onClick={() => setActiveTab("content")}>1. Conteúdo</button>
+              <button type="button" role="tab" aria-selected={activeTab === "appearance"} className={activeTab === "appearance" ? "active" : ""} onClick={() => setActiveTab("appearance")}>2. Aparência</button>
+              <button type="button" role="tab" aria-selected={activeTab === "schedule"} className={activeTab === "schedule" ? "active" : ""} onClick={() => setActiveTab("schedule")}>3. Quando exibir</button>
+              <button type="button" role="tab" aria-selected={activeTab === "tvs"} className={activeTab === "tvs" ? "active" : ""} onClick={() => setActiveTab("tvs")}>4. TVs</button>
+            </div>
             <div className="form-tab-panel" hidden={activeTab !== "content"}>
             <div className="content-type-picker three">
               <button
@@ -893,6 +898,8 @@ export function ContentComposer({
                   required
                 />
               </label>
+            </div></div>
+            <div className="form-tab-panel" hidden={activeTab !== "appearance"}>
               <PresentationSettingsFields
                 companyId={companyId}
                 value={presentation}
@@ -904,7 +911,7 @@ export function ContentComposer({
                   fit: imageFit,
                 }}
               />
-            </div></div>
+            </div>
             <div className="form-tab-panel editor-form" hidden={activeTab !== "schedule"}>
               <ContentScheduleFields value={schedule} onChange={setSchedule}/>
             </div>
