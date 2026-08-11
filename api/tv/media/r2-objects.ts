@@ -51,7 +51,7 @@ export default async function handler(
       return [
         {
           key,
-          filename: decodeURIComponent(key.split("/").at(-1) ?? key),
+          filename: decodeURIComponent(key.split("/").pop() ?? key),
           publicUrl: `${publicBaseUrl}/${key}`,
           size: object.Size ?? 0,
           lastModified: object.LastModified?.toISOString() ?? null,

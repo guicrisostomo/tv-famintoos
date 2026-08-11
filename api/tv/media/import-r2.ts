@@ -14,7 +14,7 @@ export default async function handler(request: VercelRequest, response: VercelRe
     const duration = Number(request.body?.durationSeconds)
     const animation = ['none', 'zoom_in', 'zoom_out', 'pan_left', 'pan_right'].includes(request.body?.animation) ? request.body.animation : 'none'
     if (!key.startsWith(`tv/${company.companyId}/`) || key.includes('..')) throw new HttpError(403, 'A mídia não pertence à empresa autenticada.')
-    const extension = key.split('.').at(-1)?.toLowerCase() ?? ''
+    const extension = key.split('.').pop()?.toLowerCase() ?? ''
     const fallbackMime = mimeByExtension[extension]
     if (!fallbackMime) throw new HttpError(400, 'Formato não suportado. Use JPG, PNG, WebP ou MP4.')
     const { data: existing } = await company.supabase.from('tv_media').select('id').eq('company_id', company.companyId).eq('storage_key', key).maybeSingle()
@@ -25,7 +25,7 @@ export default async function handler(request: VercelRequest, response: VercelRe
     const mimeType = object.ContentType && (object.ContentType.startsWith('image/') || object.ContentType === 'video/mp4') ? object.ContentType : fallbackMime
     const mediaType = mimeType.startsWith('video/') ? 'video' : 'image'
     const publicUrl = `${publicBaseUrl}/${key}`
-    const filename = decodeURIComponent(key.split('/').at(-1) ?? key)
+    const filename = decodeURIComponent(key.split('/').pop() ?? key)
     const sha = object.ChecksumSHA256 ?? object.ETag?.replaceAll('"', '') ?? `r2-${key}`
     let assetId: number | null = null
     const { data: knownAsset } = await company.supabase.from('r2_media_assets').select('id').eq('business_cnpj', company.companyId).eq('r2_key', key).maybeSingle()
