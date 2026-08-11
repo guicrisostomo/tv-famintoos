@@ -19,11 +19,11 @@ import { useTvData } from '../hooks/useTvData';
 import { CallsPage } from './CallsPage';
 import { ConnectionBanner } from './ConnectionBanner';
 import { MediaLibraryPage } from './MediaLibraryPage';
+import { PlannerPage } from './PlannerPage';
 import { ProgrammingPage } from './ProgrammingPage';
 import { PromotionEditorPage } from './PromotionEditorPage';
 import { PromotionsPage } from './PromotionsPage';
 import { TvSetupPage } from './TvSetupPage';
-import { PlannerPage } from './PlannerPage';
 
 const navigation = [
   ['Início', Home],
@@ -180,10 +180,7 @@ export function AdminShell({
             />
           ) : null}
           {page === 'Planejamento' ? (
-            <PlannerPage
-              displays={tvData.displays}
-              items={tvData.items}
-            />
+            <PlannerPage displays={tvData.displays} items={tvData.items} />
           ) : null}
           {page === 'Chamadas' ? (
             <CallsPage
@@ -345,7 +342,7 @@ function SettingsPage({
             <p>
               O estado do Supabase e do armazenamento aparece no aviso de conexão no topo. O
               diagnóstico de áudio está disponível adicionando <code>?diagnostic=audio</code> à URL
-              da TV.
+              da TV, e o diagnóstico do player em <code>?diagnostic=player</code>.
             </p>
           </div>
         </div>
