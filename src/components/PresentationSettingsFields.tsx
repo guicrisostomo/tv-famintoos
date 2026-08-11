@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Check, LoaderCircle, Play, Sparkles, Upload } from "lucide-react";
+import { Check, Copy, LoaderCircle, Play, Sparkles, Upload } from "lucide-react";
 import type { TvImageFit, TvMediaRecord, TvTransitionType } from "../hooks/useTvData";
 import { supabase } from "../services/supabase";
 import { uploadWatermarkLogo } from "../services/watermarkLogo";
@@ -9,6 +9,17 @@ export interface PresentationSettings {
   transitionType: TvTransitionType;
   transitionDurationMs: number;
   watermarkEnabled: boolean;
+  watermarkName: string;
+  watermarkLogoMediaId: string | null;
+  watermarkLogoUrl: string;
+  watermarkPhone: string;
+  watermarkExtraText: string;
+}
+
+export interface WatermarkTemplate {
+  id: string;
+  label: string;
+  sourceCount: number;
   watermarkName: string;
   watermarkLogoMediaId: string | null;
   watermarkLogoUrl: string;
@@ -28,11 +39,13 @@ export function PresentationSettingsFields({
   value,
   onChange,
   preview,
+  watermarkTemplates = [],
 }: {
   companyId: string;
   value: PresentationSettings;
   onChange: (value: PresentationSettings) => void;
   preview: PresentationPreview;
+  watermarkTemplates?: WatermarkTemplate[];
 }) {
   const [logos, setLogos] = useState<TvMediaRecord[]>([]);
   const [logoError, setLogoError] = useState<string | null>(null);
@@ -85,6 +98,18 @@ export function PresentationSettingsFields({
       setUploadingLogo(false);
     }
   };
+  const reuseWatermark = (templateId: string) => {
+    const template = watermarkTemplates.find((item) => item.id === templateId);
+    if (!template) return;
+    update({
+      watermarkEnabled: true,
+      watermarkName: template.watermarkName,
+      watermarkLogoMediaId: template.watermarkLogoMediaId,
+      watermarkLogoUrl: template.watermarkLogoUrl,
+      watermarkPhone: template.watermarkPhone,
+      watermarkExtraText: template.watermarkExtraText,
+    });
+  };
 
   return (
     <div className="presentation-workspace">
@@ -131,10 +156,27 @@ export function PresentationSettingsFields({
           <div className="presentation-section-heading">
             <span className="watermark-heading-icon">Aa</span>
             <div>
-              <h3 id="watermark-heading">Marca d'água inferior</h3>
+              <h3 id="watermark-heading">Marca d'água superior</h3>
               <p>Identifique sua empresa sem esconder o conteúdo principal.</p>
             </div>
           </div>
+          {watermarkTemplates.length ? (
+            <div className="watermark-reuse-card">
+              <span className="watermark-reuse-icon"><Copy size={17} /></span>
+              <label>
+                Copiar marca d'água de outro conteúdo
+                <select value="" onChange={(event) => reuseWatermark(event.target.value)}>
+                  <option value="">Selecione uma configuração existente</option>
+                  {watermarkTemplates.map((template) => (
+                    <option key={template.id} value={template.id}>
+                      {template.label}{template.sourceCount > 1 ? ` · usada em ${template.sourceCount} conteúdos` : ""}
+                    </option>
+                  ))}
+                </select>
+                <small>Ao selecionar, a marca será ativada e você ainda poderá editar os dados.</small>
+              </label>
+            </div>
+          ) : null}
           <label className="watermark-toggle">
             <input
               type="checkbox"

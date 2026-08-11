@@ -27,7 +27,7 @@ import {
 import { supabase } from "../services/supabase";
 import { importWatermarkLogoUrl } from "../services/watermarkLogo";
 import { SoundPicker, type SoundSettings } from "./SoundPicker";
-import { PresentationSettingsFields, type PresentationSettings } from "./PresentationSettingsFields";
+import { PresentationSettingsFields, type PresentationSettings, type WatermarkTemplate } from "./PresentationSettingsFields";
 import { ContentScheduleFields } from "./ContentScheduleFields";
 import { alwaysSchedule, scheduleDatabaseValues, type ContentSchedule } from "./contentSchedule";
 
@@ -176,6 +176,7 @@ export function ContentComposer({
     watermarkPhone: "",
     watermarkExtraText: "",
   });
+  const watermarkTemplates = useMemo(() => buildWatermarkTemplates(items), [items]);
   const [schedule, setSchedule] = useState<ContentSchedule>(alwaysSchedule);
   const selectedNames = useMemo(
     () =>
@@ -919,6 +920,7 @@ export function ContentComposer({
                 companyId={companyId}
                 value={presentation}
                 onChange={setPresentation}
+                watermarkTemplates={watermarkTemplates}
                 preview={{
                   type,
                   url: previewUrl,
@@ -983,4 +985,38 @@ export function ContentComposer({
       </section>
     </div>
   );
+}
+
+function buildWatermarkTemplates(items: TvPlaylistRecord[]): WatermarkTemplate[] {
+  const templates = new Map<
+    string,
+    { template: Omit<WatermarkTemplate, "id" | "label" | "sourceCount">; sources: Map<string, string> }
+  >();
+  for (const item of items) {
+    if (!item.watermark_enabled) continue;
+    const template = {
+      watermarkName: item.watermark_name ?? "",
+      watermarkLogoMediaId: item.watermark_logo_media_id ?? null,
+      watermarkLogoUrl:
+        item.watermark_logo?.public_url ??
+        item.watermark_logo?.media_url ??
+        item.watermark_logo_url ??
+        "",
+      watermarkPhone: item.watermark_phone ?? "",
+      watermarkExtraText: item.watermark_extra_text ?? "",
+    };
+    const signature = JSON.stringify(template);
+    const existing = templates.get(signature);
+    if (existing) existing.sources.set(item.media_id, item.media.title);
+    else templates.set(signature, { template, sources: new Map([[item.media_id, item.media.title]]) });
+  }
+  return Array.from(templates, ([id, entry]) => {
+    const titles = Array.from(entry.sources.values());
+    return {
+      id,
+      ...entry.template,
+      sourceCount: titles.length,
+      label: titles.length > 1 ? `${titles[0]} e mais ${titles.length - 1}` : titles[0],
+    };
+  });
 }
