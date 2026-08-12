@@ -55,12 +55,13 @@ export function EditProgrammingItem({
     transitionType: item.transition_type ?? "fade",
     transitionDurationMs: item.transition_duration_ms ?? 700,
     watermarkEnabled: item.watermark_enabled ?? false,
+    watermarkStyle: item.watermark_style ?? "full",
     watermarkName: item.watermark_name ?? "",
     watermarkLogoMediaId: item.watermark_logo_media_id ?? null,
     watermarkLogoUrl: item.watermark_logo_url ?? "",
     watermarkPhone: item.watermark_phone ?? "",
     watermarkExtraText: item.watermark_extra_text ?? "",
-    watermarkQrEnabled: item.watermark_qr_enabled ?? false,
+    watermarkQrEnabled: item.watermark_style === "qr_only" || (item.watermark_qr_enabled ?? false),
     watermarkQrValue: item.watermark_qr_value ?? "",
   });
   const [schedule, setSchedule] = useState<ContentSchedule>(() => ({
@@ -95,7 +96,7 @@ export function EditProgrammingItem({
       setError("A URL do logo precisa começar com https://.");
       return;
     }
-    if (presentation.watermarkEnabled && presentation.watermarkQrEnabled && !presentation.watermarkQrValue.trim()) {
+    if (presentation.watermarkEnabled && (presentation.watermarkStyle === "qr_only" || presentation.watermarkQrEnabled) && !presentation.watermarkQrValue.trim()) {
       setError("Informe o conteúdo que será transformado em QR Code.");
       return;
     }
@@ -167,8 +168,9 @@ export function EditProgrammingItem({
             watermark_logo_url: presentation.watermarkEnabled ? resolvedWatermarkLogoUrl || null : null,
             watermark_phone: presentation.watermarkEnabled ? presentation.watermarkPhone.trim() || null : null,
             watermark_extra_text: presentation.watermarkEnabled ? presentation.watermarkExtraText.trim() || null : null,
-            watermark_qr_enabled: presentation.watermarkEnabled && presentation.watermarkQrEnabled,
-            watermark_qr_value: presentation.watermarkEnabled && presentation.watermarkQrEnabled ? presentation.watermarkQrValue.trim() || null : null,
+            watermark_style: presentation.watermarkStyle,
+            watermark_qr_enabled: presentation.watermarkEnabled && (presentation.watermarkStyle === "qr_only" || presentation.watermarkQrEnabled),
+            watermark_qr_value: presentation.watermarkEnabled && (presentation.watermarkStyle === "qr_only" || presentation.watermarkQrEnabled) ? presentation.watermarkQrValue.trim() || null : null,
           })
           .eq("company_id", companyId)
           .in(
@@ -235,8 +237,9 @@ export function EditProgrammingItem({
               watermark_logo_url: presentation.watermarkEnabled ? resolvedWatermarkLogoUrl || null : null,
               watermark_phone: presentation.watermarkEnabled ? presentation.watermarkPhone.trim() || null : null,
               watermark_extra_text: presentation.watermarkEnabled ? presentation.watermarkExtraText.trim() || null : null,
-              watermark_qr_enabled: presentation.watermarkEnabled && presentation.watermarkQrEnabled,
-              watermark_qr_value: presentation.watermarkEnabled && presentation.watermarkQrEnabled ? presentation.watermarkQrValue.trim() || null : null,
+              watermark_style: presentation.watermarkStyle,
+              watermark_qr_enabled: presentation.watermarkEnabled && (presentation.watermarkStyle === "qr_only" || presentation.watermarkQrEnabled),
+              watermark_qr_value: presentation.watermarkEnabled && (presentation.watermarkStyle === "qr_only" || presentation.watermarkQrEnabled) ? presentation.watermarkQrValue.trim() || null : null,
               position: (maxPositions.get(displayId) ?? -1) + 1,
               is_active: true,
             })),

@@ -234,7 +234,7 @@ export function TvMediaStage({
   return (
     <div
       ref={stageRef}
-      className={`media-layer${isVideo ? " media-layer-video" : ""}${item.watermark?.enabled ? " has-watermark" : ""}${item.watermark?.enabled && item.watermark.qrEnabled && item.watermark.qrValue?.trim() ? " has-watermark-qr" : ""}`}
+      className={`media-layer${isVideo ? " media-layer-video" : ""}${item.watermark?.enabled ? ` has-watermark watermark-style-${item.watermark.style ?? "full"}` : ""}${item.watermark?.enabled && (item.watermark.style === "qr_only" || item.watermark.qrEnabled) && item.watermark.qrValue?.trim() ? " has-watermark-qr" : ""}`}
       style={{ "--media-fit": mediaFit } as React.CSSProperties}
     >
       <video
@@ -290,6 +290,7 @@ export function TvMediaStage({
           phone={item.watermark.phone}
           qrEnabled={item.watermark.qrEnabled}
           qrValue={item.watermark.qrValue}
+          style={item.watermark.style ?? "full"}
         />
       ) : null}
       {item.qrCodeUrl ? (

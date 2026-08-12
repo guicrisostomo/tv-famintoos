@@ -1,3 +1,5 @@
+import type { WatermarkStyle } from './watermark'
+
 export type MediaType = 'image' | 'video' | 'message' | 'qr_code' | 'audio'
 export type StorageProvider = 'cloudflare_r2' | 'supabase_storage' | 'external_url'
 export type InterruptionKind = 'call' | 'urgent_notice' | 'campaign'
@@ -33,6 +35,7 @@ export interface ProgramItem {
   transition?: { type: TvTransitionType; durationMs: number }
   watermark?: {
     enabled: boolean
+    style?: WatermarkStyle
     name?: string | null
     logoUrl?: string | null
     phone?: string | null

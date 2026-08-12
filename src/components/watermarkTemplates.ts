@@ -1,9 +1,11 @@
 import type { TvPlaylistRecord } from "../hooks/useTvData";
+import type { WatermarkStyle } from "../domain/watermark";
 
 export interface WatermarkTemplate {
   id: string;
   label: string;
   sourceCount: number;
+  watermarkStyle: WatermarkStyle;
   watermarkName: string;
   watermarkLogoMediaId: string | null;
   watermarkLogoUrl: string;
@@ -21,6 +23,7 @@ export function buildWatermarkTemplates(items: TvPlaylistRecord[]): WatermarkTem
   for (const item of items) {
     if (!item.watermark_enabled) continue;
     const template = {
+      watermarkStyle: item.watermark_style ?? "full",
       watermarkName: item.watermark_name ?? "",
       watermarkLogoMediaId: item.watermark_logo_media_id ?? null,
       watermarkLogoUrl:

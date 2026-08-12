@@ -14,6 +14,7 @@ import {
   WandSparkles,
 } from "lucide-react";
 import type { TvMediaRecord, TvPlaylistRecord, TvTransitionType } from "../hooks/useTvData";
+import { watermarkStyleOptions, type WatermarkStyle } from "../domain/watermark";
 import { supabase } from "../services/supabase";
 import { resolveWatermarkLogo, uploadWatermarkLogo } from "../services/watermarkLogo";
 import { transitionOptions } from "./presentationOptions";
@@ -64,6 +65,7 @@ export function BulkAppearancePage({
   const [transitionDurationMs, setTransitionDurationMs] = useState(700);
   const [applyWatermark, setApplyWatermark] = useState(true);
   const [watermarkEnabled, setWatermarkEnabled] = useState(true);
+  const [watermarkStyle, setWatermarkStyle] = useState<WatermarkStyle>("full");
   const [watermarkName, setWatermarkName] = useState("");
   const [watermarkPhone, setWatermarkPhone] = useState("");
   const [watermarkExtraText, setWatermarkExtraText] = useState("");
@@ -121,6 +123,7 @@ export function BulkAppearancePage({
     setWatermarkLogoUrl(profile.icon || profile.og_image_url || profile.pwa_icon_512 || "");
     setWatermarkQrEnabled(false);
     setWatermarkQrValue("");
+    setWatermarkStyle("full");
     setSelectedWatermarkTemplateId("");
   }, []);
 
@@ -130,8 +133,9 @@ export function BulkAppearancePage({
     setWatermarkExtraText(template.watermarkExtraText);
     setWatermarkLogoMediaId(template.watermarkLogoMediaId);
     setWatermarkLogoUrl(template.watermarkLogoUrl);
-    setWatermarkQrEnabled(template.watermarkQrEnabled);
+    setWatermarkQrEnabled(template.watermarkStyle === "qr_only" || template.watermarkQrEnabled);
     setWatermarkQrValue(template.watermarkQrValue);
+    setWatermarkStyle(template.watermarkStyle);
     setSelectedWatermarkTemplateId(template.id);
   }, []);
 
@@ -222,7 +226,7 @@ export function BulkAppearancePage({
       setError("A URL do logo precisa começar com https://.");
       return;
     }
-    if (applyWatermark && watermarkEnabled && watermarkQrEnabled && !watermarkQrValue.trim()) {
+    if (applyWatermark && watermarkEnabled && (watermarkStyle === "qr_only" || watermarkQrEnabled) && !watermarkQrValue.trim()) {
       setError("Informe o conteúdo que será transformado em QR Code.");
       return;
     }
@@ -254,13 +258,14 @@ export function BulkAppearancePage({
       }
       if (applyWatermark) {
         changes.watermark_enabled = watermarkEnabled;
+        changes.watermark_style = watermarkStyle;
         changes.watermark_name = watermarkEnabled ? watermarkName.trim() || null : null;
         changes.watermark_phone = watermarkEnabled ? watermarkPhone.trim() || null : null;
         changes.watermark_extra_text = watermarkEnabled ? watermarkExtraText.trim() || null : null;
         changes.watermark_logo_media_id = watermarkEnabled ? resolvedLogoMediaId : null;
         changes.watermark_logo_url = watermarkEnabled && resolvedLogoMediaId ? resolvedLogoUrl || null : null;
-        changes.watermark_qr_enabled = watermarkEnabled && watermarkQrEnabled;
-        changes.watermark_qr_value = watermarkEnabled && watermarkQrEnabled ? watermarkQrValue.trim() || null : null;
+        changes.watermark_qr_enabled = watermarkEnabled && (watermarkStyle === "qr_only" || watermarkQrEnabled);
+        changes.watermark_qr_value = watermarkEnabled && (watermarkStyle === "qr_only" || watermarkQrEnabled) ? watermarkQrValue.trim() || null : null;
       }
       const { data, error: updateError } = await supabase
         .from("tv_playlist_items")
@@ -364,6 +369,25 @@ export function BulkAppearancePage({
                     </div>
                   ) : null}
                   <div className="business-prefill-row"><div><Building2 size={17} /><span><strong>Dados da empresa</strong><small>{loadingDefaults ? "Carregando cadastro..." : business ? "Informações encontradas no Supabase" : "Cadastro não encontrado"}</small></span></div><button type="button" className="button secondary" disabled={!business} onClick={() => business && fillFromBusiness(business)}>Preencher novamente</button></div>
+                  <div className="watermark-style-picker bulk-watermark-style-picker" role="group" aria-label="Estilo da marca d'água">
+                    {watermarkStyleOptions.map((option) => (
+                      <button
+                        key={option.value}
+                        type="button"
+                        aria-pressed={watermarkStyle === option.value}
+                        className={watermarkStyle === option.value ? "selected" : ""}
+                        onClick={() => {
+                          setWatermarkStyle(option.value);
+                          if (option.value === "qr_only") setWatermarkQrEnabled(true);
+                        }}
+                      >
+                        <span className={`watermark-style-swatch watermark-style-swatch-${option.value}`} aria-hidden="true"><i /></span>
+                        <span><strong>{option.label}</strong><small>{option.description}</small></span>
+                        {watermarkStyle === option.value ? <Check size={16} /> : null}
+                      </button>
+                    ))}
+                  </div>
+                  {watermarkStyle === "qr_only" ? <p className="watermark-qr-only-note">Logo e textos ficam salvos, mas somente o QR Code será exibido.</p> : null}
                   <div className="watermark-fields bulk-watermark-fields">
                     <label>Nome ou marca<input maxLength={80} value={watermarkName} onChange={(event) => setWatermarkName(event.target.value)} /></label>
                     <label>Telefone / WhatsApp<input maxLength={40} value={watermarkPhone} onChange={(event) => setWatermarkPhone(event.target.value)} /></label>
@@ -371,10 +395,10 @@ export function BulkAppearancePage({
                   </div>
                   <div className="watermark-qr-settings bulk-watermark-qr-settings">
                     <label className="watermark-toggle watermark-qr-toggle">
-                      <input type="checkbox" checked={watermarkQrEnabled} onChange={(event) => setWatermarkQrEnabled(event.target.checked)} />
+                      <input type="checkbox" checked={watermarkStyle === "qr_only" || watermarkQrEnabled} disabled={watermarkStyle === "qr_only"} onChange={(event) => setWatermarkQrEnabled(event.target.checked)} />
                       <span><QrCode size={18} /><strong>Adicionar o mesmo QR Code</strong><small>Será aplicado aos conteúdos selecionados.</small></span>
                     </label>
-                    {watermarkQrEnabled ? (
+                    {watermarkStyle === "qr_only" || watermarkQrEnabled ? (
                       <label>
                         Conteúdo do QR Code
                         <input type="text" maxLength={2048} value={watermarkQrValue} onChange={(event) => setWatermarkQrValue(event.target.value)} placeholder="https://seusite.com/cardapio" />
@@ -429,7 +453,7 @@ export function BulkAppearancePage({
             </div>
           ) : null}
 
-          <BulkPreview content={previewContent} transitionType={applyTransition ? transitionType : "none"} transitionDurationMs={transitionDurationMs} watermarkEnabled={applyWatermark && watermarkEnabled} watermarkName={watermarkName} watermarkPhone={watermarkPhone} watermarkExtraText={watermarkExtraText} watermarkQrEnabled={watermarkQrEnabled} watermarkQrValue={watermarkQrValue} logoUrl={finalLogoUrl} previewRun={previewRun} />
+          <BulkPreview content={previewContent} transitionType={applyTransition ? transitionType : "none"} transitionDurationMs={transitionDurationMs} watermarkEnabled={applyWatermark && watermarkEnabled} watermarkStyle={watermarkStyle} watermarkName={watermarkName} watermarkPhone={watermarkPhone} watermarkExtraText={watermarkExtraText} watermarkQrEnabled={watermarkQrEnabled} watermarkQrValue={watermarkQrValue} logoUrl={finalLogoUrl} previewRun={previewRun} />
         </section>
       </div>
 
@@ -465,9 +489,9 @@ function BusinessSuggestions({ business, onSelect }: { business: BusinessAppeara
   return suggestions.length ? <div className="business-suggestions"><span>Sugestões:</span>{suggestions.map((suggestion) => <button key={suggestion.label} type="button" onClick={() => onSelect(suggestion.value)}>{suggestion.label}</button>)}</div> : null;
 }
 
-function BulkPreview({ content, transitionType, transitionDurationMs, watermarkEnabled, watermarkName, watermarkPhone, watermarkExtraText, watermarkQrEnabled, watermarkQrValue, logoUrl, previewRun }: { content?: BulkContentGroup; transitionType: TvTransitionType; transitionDurationMs: number; watermarkEnabled: boolean; watermarkName: string; watermarkPhone: string; watermarkExtraText: string; watermarkQrEnabled: boolean; watermarkQrValue: string; logoUrl: string; previewRun: number }) {
+function BulkPreview({ content, transitionType, transitionDurationMs, watermarkEnabled, watermarkStyle, watermarkName, watermarkPhone, watermarkExtraText, watermarkQrEnabled, watermarkQrValue, logoUrl, previewRun }: { content?: BulkContentGroup; transitionType: TvTransitionType; transitionDurationMs: number; watermarkEnabled: boolean; watermarkStyle: WatermarkStyle; watermarkName: string; watermarkPhone: string; watermarkExtraText: string; watermarkQrEnabled: boolean; watermarkQrValue: string; logoUrl: string; previewRun: number }) {
   const mediaUrl = content?.item.media.public_url ?? content?.item.media.media_url;
-  return <div className="bulk-preview"><div className="presentation-preview-heading"><strong>Prévia</strong><span>{content?.item.media.title ?? "Selecione um conteúdo"}</span></div><div key={`${transitionType}-${transitionDurationMs}-${previewRun}`} className={`presentation-preview transition-preview-${transitionType}${watermarkEnabled ? " has-watermark" : ""}${watermarkEnabled && watermarkQrEnabled && watermarkQrValue.trim() ? " has-watermark-qr" : ""}`} style={{ "--transition-duration": `${transitionDurationMs}ms` } as React.CSSProperties}>{content?.item.media.media_type === "image" && mediaUrl ? <img src={mediaUrl} alt="Prévia" /> : content?.item.media.media_type === "video" && mediaUrl ? <video src={mediaUrl} preload="metadata" muted playsInline /> : <div className="presentation-preview-message">{content?.item.media.message_text || content?.item.media.title || "Seu conteúdo"}</div>}{watermarkEnabled ? <WatermarkOverlay className="preview-watermark" logoUrl={logoUrl} name={watermarkName} extraText={watermarkExtraText} phone={watermarkPhone} qrEnabled={watermarkQrEnabled} qrValue={watermarkQrValue} /> : null}</div></div>;
+  return <div className="bulk-preview"><div className="presentation-preview-heading"><strong>Prévia</strong><span>{content?.item.media.title ?? "Selecione um conteúdo"}</span></div><div key={`${transitionType}-${transitionDurationMs}-${previewRun}`} className={`presentation-preview transition-preview-${transitionType}${watermarkEnabled ? ` has-watermark watermark-style-${watermarkStyle}` : ""}${watermarkEnabled && (watermarkStyle === "qr_only" || watermarkQrEnabled) && watermarkQrValue.trim() ? " has-watermark-qr" : ""}`} style={{ "--transition-duration": `${transitionDurationMs}ms` } as React.CSSProperties}>{content?.item.media.media_type === "image" && mediaUrl ? <img src={mediaUrl} alt="Prévia" /> : content?.item.media.media_type === "video" && mediaUrl ? <video src={mediaUrl} preload="metadata" muted playsInline /> : <div className="presentation-preview-message">{content?.item.media.message_text || content?.item.media.title || "Seu conteúdo"}</div>}{watermarkEnabled ? <WatermarkOverlay className="preview-watermark" logoUrl={logoUrl} name={watermarkName} extraText={watermarkExtraText} phone={watermarkPhone} qrEnabled={watermarkQrEnabled} qrValue={watermarkQrValue} style={watermarkStyle} /> : null}</div></div>;
 }
 
 function businessAddress(business: BusinessAppearanceProfile) {

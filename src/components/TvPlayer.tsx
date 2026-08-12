@@ -214,6 +214,7 @@ export function TvPlayer({ companyId, displayId }: { companyId: string; displayI
           },
           watermark: {
             enabled: item.watermark_enabled ?? false,
+            style: item.watermark_style ?? 'full',
             name: item.watermark_name,
             logoUrl: item.watermark_logo?.public_url ?? item.watermark_logo?.media_url ?? item.watermark_logo_url,
             phone: item.watermark_phone,

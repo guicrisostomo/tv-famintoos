@@ -171,6 +171,7 @@ export function ContentComposer({
     transitionType: "fade",
     transitionDurationMs: 700,
     watermarkEnabled: false,
+    watermarkStyle: "full",
     watermarkName: "",
     watermarkLogoMediaId: null,
     watermarkLogoUrl: "",
@@ -345,7 +346,7 @@ export function ContentComposer({
       setError("A URL do logo precisa começar com https://.");
       return;
     }
-    if (presentation.watermarkEnabled && presentation.watermarkQrEnabled && !presentation.watermarkQrValue.trim()) {
+    if (presentation.watermarkEnabled && (presentation.watermarkStyle === "qr_only" || presentation.watermarkQrEnabled) && !presentation.watermarkQrValue.trim()) {
       setError("Informe o conteúdo que será transformado em QR Code.");
       return;
     }
@@ -499,8 +500,9 @@ export function ContentComposer({
         watermark_logo_url: presentation.watermarkEnabled ? resolvedWatermarkLogoUrl || null : null,
         watermark_phone: presentation.watermarkEnabled ? presentation.watermarkPhone.trim() || null : null,
         watermark_extra_text: presentation.watermarkEnabled ? presentation.watermarkExtraText.trim() || null : null,
-        watermark_qr_enabled: presentation.watermarkEnabled && presentation.watermarkQrEnabled,
-        watermark_qr_value: presentation.watermarkEnabled && presentation.watermarkQrEnabled ? presentation.watermarkQrValue.trim() || null : null,
+        watermark_style: presentation.watermarkStyle,
+        watermark_qr_enabled: presentation.watermarkEnabled && (presentation.watermarkStyle === "qr_only" || presentation.watermarkQrEnabled),
+        watermark_qr_value: presentation.watermarkEnabled && (presentation.watermarkStyle === "qr_only" || presentation.watermarkQrEnabled) ? presentation.watermarkQrValue.trim() || null : null,
       }));
       const { error: playlistError } = await supabase
         .from("tv_playlist_items")

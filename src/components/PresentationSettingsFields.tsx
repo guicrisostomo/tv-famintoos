@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Check, Copy, LoaderCircle, Play, QrCode, Sparkles, Upload } from "lucide-react";
+import { watermarkStyleOptions, type WatermarkStyle } from "../domain/watermark";
 import type { TvImageFit, TvMediaRecord, TvTransitionType } from "../hooks/useTvData";
 import { supabase } from "../services/supabase";
 import { uploadWatermarkLogo } from "../services/watermarkLogo";
@@ -12,6 +13,7 @@ export interface PresentationSettings {
   transitionType: TvTransitionType;
   transitionDurationMs: number;
   watermarkEnabled: boolean;
+  watermarkStyle: WatermarkStyle;
   watermarkName: string;
   watermarkLogoMediaId: string | null;
   watermarkLogoUrl: string;
@@ -101,12 +103,13 @@ export function PresentationSettingsFields({
     );
     update({
       watermarkEnabled: true,
+      watermarkStyle: template.watermarkStyle,
       watermarkName: template.watermarkName,
       watermarkLogoMediaId: matchingLogo?.id ?? template.watermarkLogoMediaId,
       watermarkLogoUrl: matchingLogo ? matchingLogo.public_url ?? matchingLogo.media_url ?? template.watermarkLogoUrl : template.watermarkLogoUrl,
       watermarkPhone: template.watermarkPhone,
       watermarkExtraText: template.watermarkExtraText,
-      watermarkQrEnabled: template.watermarkQrEnabled,
+      watermarkQrEnabled: template.watermarkStyle === "qr_only" || template.watermarkQrEnabled,
       watermarkQrValue: template.watermarkQrValue,
     });
   };
@@ -156,7 +159,7 @@ export function PresentationSettingsFields({
           <div className="presentation-section-heading">
             <span className="watermark-heading-icon">Aa</span>
             <div>
-              <h3 id="watermark-heading">Marca d'água superior</h3>
+              <h3 id="watermark-heading">Marca d'água</h3>
               <p>Identifique sua empresa sem esconder o conteúdo principal.</p>
             </div>
           </div>
@@ -188,6 +191,27 @@ export function PresentationSettingsFields({
           {value.watermarkEnabled ? (
             <div className="watermark-fields">
               {logoError ? <div className="form-error watermark-error" role="alert">{logoError}</div> : null}
+              <div className="watermark-style-picker" role="group" aria-label="Estilo da marca d'água">
+                {watermarkStyleOptions.map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    aria-pressed={value.watermarkStyle === option.value}
+                    className={value.watermarkStyle === option.value ? "selected" : ""}
+                    onClick={() => update({
+                      watermarkStyle: option.value,
+                      watermarkQrEnabled: option.value === "qr_only" ? true : value.watermarkQrEnabled,
+                    })}
+                  >
+                    <span className={`watermark-style-swatch watermark-style-swatch-${option.value}`} aria-hidden="true"><i /></span>
+                    <span><strong>{option.label}</strong><small>{option.description}</small></span>
+                    {value.watermarkStyle === option.value ? <Check size={16} /> : null}
+                  </button>
+                ))}
+              </div>
+              {value.watermarkStyle === "qr_only" ? (
+                <p className="watermark-qr-only-note">Logo e textos ficam salvos, mas somente o QR Code será exibido.</p>
+              ) : null}
               <label>
                 Nome ou marca
                 <input maxLength={80} value={value.watermarkName} onChange={(event) => update({ watermarkName: event.target.value })} placeholder="Ex.: Famintoos" />
@@ -204,12 +228,13 @@ export function PresentationSettingsFields({
                 <label className="watermark-toggle watermark-qr-toggle">
                   <input
                     type="checkbox"
-                    checked={value.watermarkQrEnabled}
+                    checked={value.watermarkStyle === "qr_only" || value.watermarkQrEnabled}
+                    disabled={value.watermarkStyle === "qr_only"}
                     onChange={(event) => update({ watermarkQrEnabled: event.target.checked })}
                   />
                   <span><QrCode size={18} /><strong>Adicionar QR Code</strong><small>O código será exibido dentro da marca d'água.</small></span>
                 </label>
-                {value.watermarkQrEnabled ? (
+                {value.watermarkStyle === "qr_only" || value.watermarkQrEnabled ? (
                   <label>
                     Conteúdo do QR Code
                     <input
@@ -291,7 +316,7 @@ export function PresentationSettingsFields({
         <div className="presentation-preview-heading"><strong>Prévia na TV</strong><span>Formato 16:9</span></div>
         <div
           key={`${value.transitionType}-${value.transitionDurationMs}-${previewRun}`}
-          className={`presentation-preview transition-preview-${value.transitionType}${value.watermarkEnabled ? " has-watermark" : ""}${value.watermarkEnabled && value.watermarkQrEnabled && value.watermarkQrValue.trim() ? " has-watermark-qr" : ""}`}
+          className={`presentation-preview transition-preview-${value.transitionType}${value.watermarkEnabled ? ` has-watermark watermark-style-${value.watermarkStyle}` : ""}${value.watermarkEnabled && (value.watermarkStyle === "qr_only" || value.watermarkQrEnabled) && value.watermarkQrValue.trim() ? " has-watermark-qr" : ""}`}
           style={{ "--transition-duration": `${value.transitionDurationMs}ms` } as React.CSSProperties}
         >
           {preview.type === "image" && preview.url ? (
@@ -310,6 +335,7 @@ export function PresentationSettingsFields({
               phone={value.watermarkPhone}
               qrEnabled={value.watermarkQrEnabled}
               qrValue={value.watermarkQrValue}
+              style={value.watermarkStyle}
             />
           ) : null}
         </div>
