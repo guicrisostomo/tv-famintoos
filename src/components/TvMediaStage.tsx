@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { QRCodeSVG } from "qrcode.react";
+import { defaultCaptionSettings } from "../domain/caption";
 import type { ProgramItem } from "../domain/tv";
 import { playVideoElement, resolveMediaUrl } from "../services/media";
 import { tvAudioService } from "../services/tvAudioService";
+import { CaptionOverlay } from "./CaptionOverlay";
 import { WatermarkOverlay } from "./WatermarkOverlay";
 
 interface TvMediaStageProps {
@@ -52,6 +54,11 @@ export function TvMediaStage({
     resolvedWatermarkLogo.source === sourceWatermarkLogo
       ? resolvedWatermarkLogo.url
       : sourceWatermarkLogo;
+  const captionSettings = item.caption ?? (item.overlayText ? {
+    ...defaultCaptionSettings,
+    text: item.overlayText,
+    animation: item.overlayAnimation ?? "none",
+  } : null);
 
   useEffect(() => {
     let active = true;
@@ -279,9 +286,7 @@ export function TvMediaStage({
       {item.media.type === "message" ? (
         <div className="message-content">{item.media.title}</div>
       ) : null}
-      {item.overlayText ? (
-        <div className={`media-caption caption-${item.overlayAnimation ?? "none"}`}>{item.overlayText}</div>
-      ) : null}
+      {captionSettings ? <CaptionOverlay settings={captionSettings} /> : null}
       {item.watermark?.enabled ? (
         <WatermarkOverlay
           logoUrl={watermarkLogoUrl}

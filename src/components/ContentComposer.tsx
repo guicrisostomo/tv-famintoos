@@ -12,11 +12,11 @@ import {
 } from "lucide-react";
 import type {
   ImageAnimation,
-  TvCaptionAnimation,
   TvDisplayRecord,
   TvImageFit,
   TvPlaylistRecord,
 } from "../hooks/useTvData";
+import { captionDatabaseValues, defaultCaptionSettings } from "../domain/caption";
 import {
   importR2Object,
   listUnregisteredR2Objects,
@@ -31,6 +31,8 @@ import { PresentationSettingsFields, type PresentationSettings } from "./Present
 import { buildWatermarkTemplates } from "./watermarkTemplates";
 import { ContentScheduleFields } from "./ContentScheduleFields";
 import { alwaysSchedule, scheduleDatabaseValues, type ContentSchedule } from "./contentSchedule";
+import { CaptionOverlay } from "./CaptionOverlay";
+import { CaptionSettingsFields } from "./CaptionSettingsFields";
 
 type ContentType = "message" | "image" | "video";
 interface FileInfo {
@@ -157,9 +159,7 @@ export function ContentComposer({
   const [mediaPage, setMediaPage] = useState(0);
   const [animation, setAnimation] = useState<ImageAnimation>("none");
   const [imageFit, setImageFit] = useState<TvImageFit>("contain");
-  const [captionText, setCaptionText] = useState("");
-  const [captionAnimation, setCaptionAnimation] =
-    useState<TvCaptionAnimation>("none");
+  const [caption, setCaption] = useState(() => ({ ...defaultCaptionSettings }));
   const [localPreviewUrl, setLocalPreviewUrl] = useState<string | null>(null);
   const previewObjectUrl = useRef<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -238,8 +238,7 @@ export function ContentComposer({
     setMediaPage(0);
     setAnimation("none");
     setImageFit("contain");
-    setCaptionText("");
-    setCaptionAnimation("none");
+    setCaption({ ...defaultCaptionSettings });
     setSound({ mediaId: null, media: null, volume: .7, loop: true, muteOriginalAudio: false });
     setError(null);
   };
@@ -483,11 +482,7 @@ export function ContentComposer({
         position: (maxPosition.get(displayId) ?? -1) + 1,
         is_active: true,
         image_fit: type === "image" ? imageFit : "contain",
-        caption_text: type === "message" ? null : captionText.trim() || null,
-        caption_animation:
-          type === "message" || !captionText.trim()
-            ? "none"
-            : captionAnimation,
+        ...captionDatabaseValues(caption, type !== "message"),
         sound_media_id: sound.mediaId,
         sound_volume: sound.volume,
         sound_loop: sound.loop,
@@ -831,11 +826,7 @@ export function ContentComposer({
                             src={previewUrl}
                             alt="Prévia da animação selecionada"
                           />
-                          {captionText.trim() ? (
-                            <div className={`media-caption preview-caption caption-${captionAnimation}`}>
-                              {captionText.trim()}
-                            </div>
-                          ) : null}
+                          <CaptionOverlay settings={caption} className="preview-caption" />
                           <span>
                             Prévia ·{" "}
                             {animation === "none"
@@ -860,39 +851,10 @@ export function ContentComposer({
                         playsInline
                         controls
                       />
-                      {captionText.trim() ? (
-                        <div className={`media-caption preview-caption caption-${captionAnimation}`}>
-                          {captionText.trim()}
-                        </div>
-                      ) : null}
+                      <CaptionOverlay settings={caption} className="preview-caption" />
                     </div>
                   ) : null}
-                  <div className="caption-editor">
-                    <label>
-                      Legenda opcional
-                      <input
-                        value={captionText}
-                        onChange={(event) => setCaptionText(event.target.value)}
-                        maxLength={160}
-                        placeholder="Ex.: Promoção válida até domingo"
-                      />
-                    </label>
-                    <label>
-                      Animação da legenda
-                      <select
-                        value={captionAnimation}
-                        disabled={!captionText.trim()}
-                        onChange={(event) =>
-                          setCaptionAnimation(event.target.value as TvCaptionAnimation)
-                        }
-                      >
-                        <option value="none">Sem animação</option>
-                        <option value="fade">Aparecer suavemente</option>
-                        <option value="slide_up">Subir suavemente</option>
-                        <option value="pulse">Destaque pulsante</option>
-                      </select>
-                    </label>
-                  </div>
+                  <CaptionSettingsFields value={caption} onChange={setCaption} />
                   <div
                     className={`resolution-note ${fileWarning ? "warning" : ""}`}
                   >

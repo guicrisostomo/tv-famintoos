@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { Download, Pause, Play, SkipForward } from "lucide-react";
 import type { TvPlaylistRecord } from "../hooks/useTvData";
+import { captionSettingsFromRecord } from "../domain/caption";
+import { CaptionOverlay } from "./CaptionOverlay";
 import { WatermarkOverlay } from "./WatermarkOverlay";
 
 export function PreviewPanel({ items }: { items: TvPlaylistRecord[] }) {
@@ -62,10 +64,8 @@ export function PreviewPanel({ items }: { items: TvPlaylistRecord[] }) {
         ) : (
           <div className="preview-placeholder">{current.title}</div>
         )}
-        {current && current.media_type !== "message" && currentItem.caption_text ? (
-          <div className={`media-caption preview-caption caption-${currentItem.caption_animation ?? "none"}`}>
-            {currentItem.caption_text}
-          </div>
+        {current && current.media_type !== "message" && currentItem ? (
+          <CaptionOverlay settings={captionSettingsFromRecord(currentItem)} className="preview-caption" />
         ) : null}
         {currentItem?.watermark_enabled ? (
           <WatermarkOverlay

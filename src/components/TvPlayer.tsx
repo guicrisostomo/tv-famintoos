@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Interruption, PlayerPayload } from '../domain/tv';
+import { captionSettingsFromRecord } from '../domain/caption';
 import { useDeploymentRefresh } from '../hooks/useDeploymentRefresh';
-import { playlistPresentationSelect, type TvPlaylistRecord } from '../hooks/useTvData';
+import { playlistCaptionSelect, playlistPresentationSelect, type TvPlaylistRecord } from '../hooks/useTvData';
 import { isPlayableMedia, playVideoElement, resolveMediaUrl } from '../services/media';
 import { readPayload, readPlayback, savePayload, savePlayback } from '../services/playerCache';
 import { selectNextInterruption } from '../services/playerQueue';
@@ -146,7 +147,7 @@ export function TvPlayer({ companyId, displayId }: { companyId: string; displayI
         supabase
           .from('tv_playlist_items')
           .select(
-            `id,display_id,media_id,position,is_active,image_fit,caption_text,caption_animation,${playlistPresentationSelect},sound_media_id,sound_volume,sound_loop,mute_original_audio,media:tv_media!tv_playlist_items_media_id_fkey(id,title,media_type,media_url,message_text,duration_seconds,public_url,storage_provider,storage_key,animation,starts_at,ends_at,weekdays,start_time,end_time),sound_media:tv_media!tv_playlist_items_sound_media_id_fkey(id,title,media_type,media_url,message_text,duration_seconds,public_url,storage_provider,animation)`,
+            `id,display_id,media_id,position,is_active,image_fit,${playlistCaptionSelect},${playlistPresentationSelect},sound_media_id,sound_volume,sound_loop,mute_original_audio,media:tv_media!tv_playlist_items_media_id_fkey(id,title,media_type,media_url,message_text,duration_seconds,public_url,storage_provider,storage_key,animation,starts_at,ends_at,weekdays,start_time,end_time),sound_media:tv_media!tv_playlist_items_sound_media_id_fkey(id,title,media_type,media_url,message_text,duration_seconds,public_url,storage_provider,animation)`,
           )
           .eq('company_id', companyId)
           .eq('display_id', displayId)
@@ -206,8 +207,7 @@ export function TvPlayer({ companyId, displayId }: { companyId: string; displayI
           volume: 1,
           muted: !nextSoundEnabled,
           fit: item.image_fit ?? 'contain',
-          overlayText: item.caption_text,
-          overlayAnimation: item.caption_animation ?? 'none',
+          caption: captionSettingsFromRecord(item),
           transition: {
             type: item.transition_type ?? 'none',
             durationMs: item.transition_duration_ms ?? 700,

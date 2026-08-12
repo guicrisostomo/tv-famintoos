@@ -2,17 +2,19 @@ import { useState, type FormEvent } from "react";
 import { Check, LoaderCircle, X } from "lucide-react";
 import type {
   ImageAnimation,
-  TvCaptionAnimation,
   TvDisplayRecord,
   TvImageFit,
   TvPlaylistRecord,
 } from "../hooks/useTvData";
+import { captionDatabaseValues, captionSettingsFromRecord } from "../domain/caption";
 import { supabase } from "../services/supabase";
 import { resolveWatermarkLogo } from "../services/watermarkLogo";
 import { SoundPicker, type SoundSettings } from "./SoundPicker";
 import { PresentationSettingsFields, type PresentationSettings } from "./PresentationSettingsFields";
 import { ContentScheduleFields } from "./ContentScheduleFields";
 import { scheduleDatabaseValues, type ContentSchedule } from "./contentSchedule";
+import { CaptionOverlay } from "./CaptionOverlay";
+import { CaptionSettingsFields } from "./CaptionSettingsFields";
 
 export function EditProgrammingItem({
   companyId,
@@ -41,9 +43,7 @@ export function EditProgrammingItem({
   const [imageFit, setImageFit] = useState<TvImageFit>(
     item.image_fit ?? "contain",
   );
-  const [captionText, setCaptionText] = useState(item.caption_text ?? "");
-  const [captionAnimation, setCaptionAnimation] =
-    useState<TvCaptionAnimation>(item.caption_animation ?? "none");
+  const [caption, setCaption] = useState(() => captionSettingsFromRecord(item));
   const [displayIds, setDisplayIds] = useState(() =>
     Array.from(new Set(mediaItems.map((candidate) => candidate.display_id))),
   );
@@ -148,14 +148,7 @@ export function EditProgrammingItem({
           .update({
             image_fit:
               item.media.media_type === "image" ? imageFit : "contain",
-            caption_text:
-              item.media.media_type === "message"
-                ? null
-                : captionText.trim() || null,
-            caption_animation:
-              item.media.media_type === "message" || !captionText.trim()
-                ? "none"
-                : captionAnimation,
+            ...captionDatabaseValues(caption, item.media.media_type !== "message"),
             sound_media_id: sound.mediaId,
             sound_volume: sound.volume,
             sound_loop: sound.loop,
@@ -217,14 +210,7 @@ export function EditProgrammingItem({
               media_id: item.media_id,
               image_fit:
                 item.media.media_type === "image" ? imageFit : "contain",
-              caption_text:
-                item.media.media_type === "message"
-                  ? null
-                  : captionText.trim() || null,
-              caption_animation:
-                item.media.media_type === "message" || !captionText.trim()
-                  ? "none"
-                  : captionAnimation,
+              ...captionDatabaseValues(caption, item.media.media_type !== "message"),
               sound_media_id: sound.mediaId,
               sound_volume: sound.volume,
               sound_loop: sound.loop,
@@ -310,11 +296,7 @@ export function EditProgrammingItem({
                   src={url}
                   alt="Prévia do conteúdo"
                 />
-                {captionText.trim() ? (
-                  <div className={`media-caption preview-caption caption-${captionAnimation}`}>
-                    {captionText.trim()}
-                  </div>
-                ) : null}
+                <CaptionOverlay settings={caption} className="preview-caption" />
                 <span>Prévia da animação</span>
               </div>
             ) : null}
@@ -388,32 +370,7 @@ export function EditProgrammingItem({
               </label>
             ) : null}
             {item.media.media_type !== "message" ? (
-              <div className="caption-editor">
-                <label>
-                  Legenda opcional
-                  <input
-                    value={captionText}
-                    onChange={(event) => setCaptionText(event.target.value)}
-                    maxLength={160}
-                    placeholder="Ex.: Promoção válida até domingo"
-                  />
-                </label>
-                <label>
-                  Animação da legenda
-                  <select
-                    value={captionAnimation}
-                    disabled={!captionText.trim()}
-                    onChange={(event) =>
-                      setCaptionAnimation(event.target.value as TvCaptionAnimation)
-                    }
-                  >
-                    <option value="none">Sem animação</option>
-                    <option value="fade">Aparecer suavemente</option>
-                    <option value="slide_up">Subir suavemente</option>
-                    <option value="pulse">Destaque pulsante</option>
-                  </select>
-                </label>
-              </div>
+              <CaptionSettingsFields value={caption} onChange={setCaption} />
             ) : null}
             <SoundPicker companyId={companyId} value={sound} isVideo={item.media.media_type === "video"} onChange={setSound} />
           </div>

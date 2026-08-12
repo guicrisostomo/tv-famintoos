@@ -1,4 +1,5 @@
 import type { WatermarkStyle } from './watermark'
+import type { CaptionSettings } from './caption'
 
 export type MediaType = 'image' | 'video' | 'message' | 'qr_code' | 'audio'
 export type StorageProvider = 'cloudflare_r2' | 'supabase_storage' | 'external_url'
@@ -30,8 +31,10 @@ export interface ProgramItem {
   fit: 'contain' | 'cover' | 'fill' | 'blur_background'
   resumeBehavior: 'resume' | 'restart'
   active: boolean
+  /** Compatibilidade com programações salvas antes do editor avançado. */
   overlayText?: string | null
   overlayAnimation?: 'none' | 'fade' | 'slide_up' | 'pulse'
+  caption?: CaptionSettings
   transition?: { type: TvTransitionType; durationMs: number }
   watermark?: {
     enabled: boolean
