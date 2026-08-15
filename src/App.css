@@ -2694,6 +2694,38 @@
   padding: 0 6px;
   font-weight: 700;
 }
+.video-audio-mode {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+.video-audio-mode > button {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  min-height: 76px;
+  padding: 11px;
+  border: 1px solid #dfe5e1;
+  border-radius: 10px;
+  color: var(--ink);
+  background: white;
+  text-align: left;
+  cursor: pointer;
+}
+.video-audio-mode > button.selected {
+  border-color: var(--green-500);
+  background: #eef9f3;
+  box-shadow: 0 0 0 2px rgba(38, 162, 105, .1);
+}
+.video-audio-mode strong,
+.video-audio-mode small {
+  display: block;
+}
+.video-audio-mode small {
+  margin-top: 4px;
+  color: var(--muted);
+  line-height: 1.3;
+}
 .sound-track-list {
   display: grid;
   gap: 6px;
@@ -2750,8 +2782,99 @@
   pointer-events: none;
 }
 @media (max-width: 640px) {
+  .video-audio-mode {
+    grid-template-columns: 1fr;
+  }
   .sound-url-row {
     grid-template-columns: 1fr;
+  }
+}
+
+.tv-setup-grid {
+  grid-template-columns: minmax(250px, .65fr) minmax(0, 1.35fr);
+  align-items: start;
+}
+.tv-audio-row {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) auto;
+  align-items: start;
+}
+.display-summary,
+.display-statuses,
+.continuous-audio-toggle,
+.continuous-audio-editor summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.display-summary {
+  align-items: flex-start;
+  justify-content: space-between;
+}
+.display-statuses {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.display-statuses .sound-state {
+  display: inline-flex;
+  align-items: center;
+  margin: 0;
+}
+.continuous-audio-editor {
+  grid-column: 1 / -1;
+  width: 100%;
+  border-top: 1px solid var(--line);
+  padding-top: 10px;
+}
+.continuous-audio-editor summary {
+  cursor: pointer;
+  list-style: none;
+  color: var(--green-700);
+}
+.continuous-audio-editor summary::-webkit-details-marker {
+  display: none;
+}
+.continuous-audio-editor summary span,
+.continuous-audio-editor summary strong,
+.continuous-audio-editor summary small {
+  display: block;
+}
+.continuous-audio-editor summary small {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 400;
+}
+.continuous-audio-body {
+  display: grid;
+  gap: 12px;
+  padding-top: 14px;
+}
+.continuous-audio-toggle {
+  align-items: flex-start;
+  padding: 12px;
+  border-radius: 10px;
+  background: #f4faf6;
+}
+.continuous-audio-toggle input {
+  margin-top: 3px;
+}
+.continuous-audio-toggle small {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+  line-height: 1.4;
+}
+@media (max-width: 900px) {
+  .tv-setup-grid,
+  .tv-audio-row {
+    grid-template-columns: 1fr;
+  }
+  .display-summary {
+    flex-direction: column;
+  }
+  .display-statuses {
+    justify-content: flex-start;
   }
 }
 .audio-unlock-gate {

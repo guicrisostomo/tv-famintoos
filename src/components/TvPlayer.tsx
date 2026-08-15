@@ -44,6 +44,12 @@ export function TvPlayer({ companyId, displayId }: { companyId: string; displayI
     message: string;
   } | null>(null);
   const [soundEnabled, setSoundEnabled] = useState(true);
+  const [continuousAudio, setContinuousAudio] = useState<{
+    id: string;
+    title: string;
+    url: string;
+    volume: number;
+  } | null>(null);
   const [callSettings, setCallSettings] = useState<CallSpeechSettings>(defaultCallSpeechSettings);
   const [businessName, setBusinessName] = useState('');
   const [audioDiagnostics, setAudioDiagnostics] = useState<TvAudioDiagnostics>(() =>
@@ -164,7 +170,7 @@ export function TvPlayer({ companyId, displayId }: { companyId: string; displayI
           .order('requested_at'),
         supabase
           .from('tv_displays')
-          .select('sound_enabled')
+          .select('sound_enabled,continuous_audio_enabled,continuous_audio_media_id,continuous_audio_volume,continuous_audio_media:tv_media!tv_displays_continuous_audio_media_id_fkey(id,title,media_url,public_url)')
           .eq('company_id', companyId)
           .eq('id', displayId)
           .single(),
@@ -182,7 +188,17 @@ export function TvPlayer({ companyId, displayId }: { companyId: string; displayI
         return;
       }
       const programPayload = programResult.data as PlayerPayload | null;
-      const nextSoundEnabled = displayResult.data?.sound_enabled ?? true;
+      const displaySettings = displayResult.data as typeof displayResult.data & {
+        continuous_audio_enabled?: boolean;
+        continuous_audio_volume?: number;
+        continuous_audio_media?: { id: string; title: string; media_url: string | null; public_url: string | null } | null;
+      };
+      const nextSoundEnabled = displaySettings?.sound_enabled ?? true;
+      const displayTrack = displaySettings?.continuous_audio_media;
+      const displayTrackUrl = displayTrack?.public_url ?? displayTrack?.media_url;
+      const nextContinuousAudio = displaySettings?.continuous_audio_enabled && displayTrack && displayTrackUrl
+        ? { id: displayTrack.id, title: displayTrack.title, url: displayTrackUrl, volume: Number(displaySettings.continuous_audio_volume ?? 0.7) }
+        : null;
       const nextCallSettings = templateResult.data
         ? {
             ...defaultCallSpeechSettings,
@@ -196,6 +212,13 @@ export function TvPlayer({ companyId, displayId }: { companyId: string; displayI
       setCallSettings(nextCallSettings);
       setBusinessName(businessResult.data?.name ?? '');
       setSoundEnabled(nextSoundEnabled);
+      setContinuousAudio((current) =>
+        current?.id === nextContinuousAudio?.id &&
+        current?.url === nextContinuousAudio?.url &&
+        current?.volume === nextContinuousAudio?.volume
+          ? current
+          : nextContinuousAudio,
+      );
       tvAudioService.setEnabled(nextSoundEnabled);
       const legacyItems = ((playlistResult.data ?? []) as unknown as TvPlaylistRecord[])
         .filter((item) => isScheduledNow(item.media))
@@ -205,7 +228,7 @@ export function TvPlayer({ companyId, displayId }: { companyId: string; displayI
           displayIds: [displayId],
           durationSeconds: item.media.duration_seconds ?? 10,
           volume: 1,
-          muted: !nextSoundEnabled,
+          muted: !nextSoundEnabled || Boolean(nextContinuousAudio) || Boolean(item.mute_original_audio),
           fit: item.image_fit ?? 'contain',
           caption: captionSettingsFromRecord(item),
           transition: {
@@ -281,7 +304,7 @@ export function TvPlayer({ companyId, displayId }: { companyId: string; displayI
       const next: PlayerPayload = {
         companyId,
         displayId,
-        items: [...legacyItems, ...programItems],
+        items: [...legacyItems, ...programItems].map((item) => nextContinuousAudio ? { ...item, muted: true } : item),
         interruptions: [...programInterruptions, ...pendingCalls],
         syncedAt: new Date().toISOString(),
       };
@@ -457,6 +480,7 @@ export function TvPlayer({ companyId, displayId }: { companyId: string; displayI
       isPlayableMedia(item.media),
   );
   const current = items[index % Math.max(items.length, 1)];
+  const hasPlayableContent = Boolean(current);
   const next = items.length > 1 ? items[(index + 1) % items.length] : null;
   const nextIndex = items.length ? (index + 1) % items.length : 0;
   const nextItemId = items[nextIndex]?.id ?? '';
@@ -531,6 +555,9 @@ export function TvPlayer({ companyId, displayId }: { companyId: string; displayI
       reconnectRef.current();
       void load();
       void tvAudioService.resumeAudioContext();
+      if (activated && soundEnabled && continuousAudio && !activeInterruption && hasPlayableContent) {
+        void tvAudioService.playSoundtrack(continuousAudio.url, continuousAudio.volume, true).catch((error) => runtime.error(error));
+      }
       const video = videoRef.current;
       if (activated && video && current?.media.type === 'video') {
         void (async () => {
@@ -545,7 +572,7 @@ export function TvPlayer({ companyId, displayId }: { companyId: string; displayI
               return;
             }
           }
-          if (soundEnabled && !current.muted && !current.soundtrack?.muteOriginalAudio) {
+          if (soundEnabled && !continuousAudio && !current.muted && !current.soundtrack?.muteOriginalAudio) {
             void tvAudioService.playMediaAudio(video, current.volume).catch(() => {
               // Keep the visual track running even if audible playback is denied.
               video.muted = true;
@@ -606,13 +633,16 @@ export function TvPlayer({ companyId, displayId }: { companyId: string; displayI
     };
   }, [
     activated,
+    activeInterruption,
     companyId,
+    continuousAudio,
     current?.id,
     current?.media.type,
     current?.muted,
     current?.soundtrack?.muteOriginalAudio,
     current?.volume,
     displayId,
+    hasPlayableContent,
     index,
     load,
     runtime,
@@ -676,6 +706,19 @@ export function TvPlayer({ companyId, displayId }: { companyId: string; displayI
   ]);
 
   useEffect(() => {
+    if (!continuousAudio) return;
+    if (!activated || activeInterruption || !soundEnabled || !hasPlayableContent) {
+      tvAudioService.pauseSoundtrack();
+      return;
+    }
+    void tvAudioService
+      .playSoundtrack(continuousAudio.url, continuousAudio.volume, true)
+      .catch((error) => runtime.error(error));
+    return () => tvAudioService.pauseSoundtrack();
+  }, [activated, activeInterruption, continuousAudio, hasPlayableContent, runtime, soundEnabled]);
+
+  useEffect(() => {
+    if (continuousAudio) return;
     if (!activated || activeInterruption || !soundEnabled || !current?.soundtrack) {
       tvAudioService.stopSoundtrack();
       return;
@@ -684,7 +727,7 @@ export function TvPlayer({ companyId, displayId }: { companyId: string; displayI
       .playSoundtrack(current.soundtrack.url, current.soundtrack.volume, current.soundtrack.loop)
       .catch((error) => runtime.error(error));
     return () => tvAudioService.stopSoundtrack();
-  }, [activated, activeInterruption, current?.id, current?.soundtrack, runtime, soundEnabled]);
+  }, [activated, activeInterruption, continuousAudio, current?.id, current?.soundtrack, runtime, soundEnabled]);
 
   useEffect(() => {
     if (!next) {
@@ -817,13 +860,13 @@ export function TvPlayer({ companyId, displayId }: { companyId: string; displayI
           status: 'completed',
           completed_at: new Date().toISOString(),
         });
-      if (videoRef.current)
+      if (videoRef.current && !continuousAudio && !current?.muted && !current?.soundtrack?.muteOriginalAudio)
         void tvAudioService
           .playMediaAudio(videoRef.current, current?.volume ?? 1)
           .catch(() => undefined);
     }, activeInterruption.durationSeconds * 1000);
     return () => runtime.clear(timer);
-  }, [activeInterruption, companyId, current?.volume, runtime]);
+  }, [activeInterruption, companyId, continuousAudio, current?.muted, current?.soundtrack?.muteOriginalAudio, current?.volume, runtime]);
 
   useEffect(() => {
     if (!activeInterruption || activeInterruption.kind !== 'call' || !activated || !soundEnabled)

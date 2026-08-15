@@ -200,7 +200,7 @@ export function AdminShell({
           ) : null}
           {page === 'Configurações' ? (
             <SettingsPage
-              mediaProps={{ media: tvData.media, items: tvData.items, onReload: tvData.reload }}
+              mediaProps={{ media: tvData.media, items: tvData.items, displays: tvData.displays, onReload: tvData.reload }}
             />
           ) : null}
         </div>

@@ -58,7 +58,13 @@ export function PreviewPanel({ items }: { items: TvPlaylistRecord[] }) {
             />
           </>
         ) : current.media_type === "video" && imageUrl ? (
-          <video src={imageUrl} autoPlay={playing} muted playsInline controls />
+          <video
+            src={imageUrl}
+            autoPlay={playing}
+            muted={Boolean(currentItem.mute_original_audio || currentItem.sound_media_id)}
+            playsInline
+            controls
+          />
         ) : current.media_type === "message" ? (
           <div className="preview-message">{current.message_text}</div>
         ) : (

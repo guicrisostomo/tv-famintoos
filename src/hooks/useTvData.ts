@@ -3,7 +3,18 @@ import type { CaptionAnimation, CaptionDisplayStyle, CaptionFontFamily, CaptionF
 import type { WatermarkStyle } from '../domain/watermark'
 import { supabase } from '../services/supabase'
 
-export interface TvDisplayRecord { id: string; company_id: string; name: string; description: string | null; is_active: boolean; sound_enabled: boolean }
+export interface TvDisplayRecord {
+  id: string
+  company_id: string
+  name: string
+  description: string | null
+  is_active: boolean
+  sound_enabled: boolean
+  continuous_audio_enabled: boolean
+  continuous_audio_media_id: string | null
+  continuous_audio_volume: number
+  continuous_audio_media?: TvMediaRecord | null
+}
 export type ImageAnimation = 'none' | 'zoom_in' | 'zoom_out' | 'pan_left' | 'pan_right'
 export type TvImageFit = 'contain' | 'cover' | 'fill' | 'blur_background'
 export type TvCaptionAnimation = CaptionAnimation
@@ -25,12 +36,12 @@ export function useTvData(companyId: string) {
     if (!supabase) { setError('Supabase não configurado.'); setLoading(false); return }
     setLoading(true); setError(null)
     const [displayResult, playlistResult, mediaResult] = await Promise.all([
-      supabase.from('tv_displays').select('id,company_id,name,description,is_active,sound_enabled').eq('company_id', companyId).order('name'),
+      supabase.from('tv_displays').select('id,company_id,name,description,is_active,sound_enabled,continuous_audio_enabled,continuous_audio_media_id,continuous_audio_volume,continuous_audio_media:tv_media!tv_displays_continuous_audio_media_id_fkey(id,company_id,title,media_type,media_url,message_text,duration_seconds,public_url,storage_provider,storage_key,file_size,created_at)').eq('company_id', companyId).order('name'),
       supabase.from('tv_playlist_items').select(`id,display_id,media_id,position,is_active,image_fit,${playlistCaptionSelect},${playlistPresentationSelect},sound_media_id,sound_volume,sound_loop,mute_original_audio,media:tv_media!tv_playlist_items_media_id_fkey(id,title,media_type,media_url,message_text,duration_seconds,public_url,storage_provider,storage_key,animation,starts_at,ends_at,weekdays,start_time,end_time),sound_media:tv_media!tv_playlist_items_sound_media_id_fkey(id,title,media_type,media_url,message_text,duration_seconds,public_url,storage_provider,animation)`).eq('company_id', companyId).order('position'),
       supabase.from('tv_media').select('id,company_id,title,media_type,media_url,message_text,duration_seconds,public_url,storage_provider,animation,storage_key,file_size,r2_asset_id,created_at').eq('company_id', companyId).order('created_at', { ascending: false }),
     ])
     if (displayResult.error || playlistResult.error || mediaResult.error) setError(displayResult.error?.message ?? playlistResult.error?.message ?? mediaResult.error?.message ?? 'Falha ao carregar dados da TV.')
-    else { setDisplays(displayResult.data as TvDisplayRecord[]); setItems(playlistResult.data as unknown as TvPlaylistRecord[]); setMedia(mediaResult.data as TvMediaRecord[]) }
+    else { setDisplays(displayResult.data as unknown as TvDisplayRecord[]); setItems(playlistResult.data as unknown as TvPlaylistRecord[]); setMedia(mediaResult.data as TvMediaRecord[]) }
     setLoading(false)
   }, [companyId])
 

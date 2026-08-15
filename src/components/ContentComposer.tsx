@@ -166,7 +166,7 @@ export function ContentComposer({
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const [activeTab, setActiveTab] = useState<"content" | "appearance" | "schedule" | "tvs">("content");
-  const [sound, setSound] = useState<SoundSettings>({ mediaId: null, media: null, volume: .7, loop: true, muteOriginalAudio: false });
+  const [sound, setSound] = useState<SoundSettings>({ mediaId: null, media: null, volume: .7, loop: true, muteOriginalAudio: false, videoAudioMode: "original" });
   const [presentation, setPresentation] = useState<PresentationSettings>({
     transitionType: "fade",
     transitionDurationMs: 700,
@@ -239,7 +239,7 @@ export function ContentComposer({
     setAnimation("none");
     setImageFit("contain");
     setCaption({ ...defaultCaptionSettings });
-    setSound({ mediaId: null, media: null, volume: .7, loop: true, muteOriginalAudio: false });
+    setSound({ mediaId: null, media: null, volume: .7, loop: true, muteOriginalAudio: false, videoAudioMode: "original" });
     setError(null);
   };
   const selectFile = async (nextFile: File | null) => {
@@ -339,6 +339,10 @@ export function ContentComposer({
     }
     if (type === "message" && !message.trim()) {
       setError("Digite o texto que será exibido.");
+      return;
+    }
+    if (type === "video" && sound.videoAudioMode === "replace" && !sound.mediaId) {
+      setError("Escolha ou envie o áudio que substituirá o som original do vídeo.");
       return;
     }
     if (presentation.watermarkEnabled && presentation.watermarkLogoUrl.trim() && !presentation.watermarkLogoUrl.trim().startsWith("https://")) {
@@ -483,10 +487,10 @@ export function ContentComposer({
         is_active: true,
         image_fit: type === "image" ? imageFit : "contain",
         ...captionDatabaseValues(caption, type !== "message"),
-        sound_media_id: sound.mediaId,
+        sound_media_id: type === "video" ? (sound.videoAudioMode === "replace" ? sound.mediaId : null) : sound.mediaId,
         sound_volume: sound.volume,
         sound_loop: sound.loop,
-        mute_original_audio: type === "video" && sound.mediaId ? sound.muteOriginalAudio : false,
+        mute_original_audio: type === "video" ? sound.videoAudioMode !== "original" : false,
         transition_type: presentation.transitionType,
         transition_duration_ms: presentation.transitionDurationMs,
         watermark_enabled: presentation.watermarkEnabled,

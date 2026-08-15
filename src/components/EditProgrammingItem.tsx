@@ -50,7 +50,14 @@ export function EditProgrammingItem({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"content" | "appearance" | "schedule" | "tvs">("content");
-  const [sound, setSound] = useState<SoundSettings>({ mediaId: item.sound_media_id ?? null, media: item.sound_media ?? null, volume: item.sound_volume ?? .7, loop: item.sound_loop ?? true, muteOriginalAudio: item.mute_original_audio ?? false });
+  const [sound, setSound] = useState<SoundSettings>({
+    mediaId: item.sound_media_id ?? null,
+    media: item.sound_media ?? null,
+    volume: item.sound_volume ?? .7,
+    loop: item.sound_loop ?? true,
+    muteOriginalAudio: item.mute_original_audio ?? false,
+    videoAudioMode: item.media.media_type !== "video" ? "original" : item.sound_media_id ? "replace" : item.mute_original_audio ? "muted" : "original",
+  });
   const [presentation, setPresentation] = useState<PresentationSettings>({
     transitionType: item.transition_type ?? "fade",
     transitionDurationMs: item.transition_duration_ms ?? 700,
@@ -82,6 +89,10 @@ export function EditProgrammingItem({
     event.preventDefault();
     if (!supabase || displayIds.length === 0) {
       setError("Selecione pelo menos uma TV.");
+      return;
+    }
+    if (item.media.media_type === "video" && sound.videoAudioMode === "replace" && !sound.mediaId) {
+      setError("Escolha ou envie o áudio que substituirá o som original do vídeo.");
       return;
     }
     if (!title.trim()) {
@@ -149,10 +160,10 @@ export function EditProgrammingItem({
             image_fit:
               item.media.media_type === "image" ? imageFit : "contain",
             ...captionDatabaseValues(caption, item.media.media_type !== "message"),
-            sound_media_id: sound.mediaId,
+            sound_media_id: item.media.media_type === "video" ? (sound.videoAudioMode === "replace" ? sound.mediaId : null) : sound.mediaId,
             sound_volume: sound.volume,
             sound_loop: sound.loop,
-            mute_original_audio: item.media.media_type === "video" && sound.mediaId ? sound.muteOriginalAudio : false,
+            mute_original_audio: item.media.media_type === "video" ? sound.videoAudioMode !== "original" : false,
             transition_type: presentation.transitionType,
             transition_duration_ms: presentation.transitionDurationMs,
             watermark_enabled: presentation.watermarkEnabled,
@@ -211,10 +222,10 @@ export function EditProgrammingItem({
               image_fit:
                 item.media.media_type === "image" ? imageFit : "contain",
               ...captionDatabaseValues(caption, item.media.media_type !== "message"),
-              sound_media_id: sound.mediaId,
+              sound_media_id: item.media.media_type === "video" ? (sound.videoAudioMode === "replace" ? sound.mediaId : null) : sound.mediaId,
               sound_volume: sound.volume,
               sound_loop: sound.loop,
-              mute_original_audio: item.media.media_type === "video" && sound.mediaId ? sound.muteOriginalAudio : false,
+              mute_original_audio: item.media.media_type === "video" ? sound.videoAudioMode !== "original" : false,
               transition_type: presentation.transitionType,
               transition_duration_ms: presentation.transitionDurationMs,
               watermark_enabled: presentation.watermarkEnabled,

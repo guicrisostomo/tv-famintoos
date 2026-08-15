@@ -100,6 +100,7 @@ class TvAudioService {
   }
 
   stopSoundtrack() { if (!this.soundtrack) return; this.soundtrack.pause(); this.soundtrack.currentTime = 0; this.emit() }
+  pauseSoundtrack() { if (!this.soundtrack) return; this.soundtrack.pause(); this.emit() }
 
   releaseMedia(element: HTMLMediaElement) {
     const source = element.currentSrc || element.src
