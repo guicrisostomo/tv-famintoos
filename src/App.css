@@ -1526,6 +1526,11 @@
 .display-datetime.position-bottom_left { bottom: 3vmin; left: 3vmin; }
 .display-datetime.position-bottom_center { bottom: 3vmin; left: 50%; transform: translateX(-50%); text-align: center; }
 .display-datetime.position-bottom_right { right: 3vmin; bottom: 3vmin; text-align: right; }
+.display-datetime.position-bottom_left.avoid-watermark,
+.display-datetime.position-bottom_center.avoid-watermark,
+.display-datetime.position-bottom_right.avoid-watermark {
+  bottom: clamp(124px, 15vmin, 210px);
+}
 .display-datetime.theme-light {
   color: #101814;
   background: rgba(255, 255, 255, 0.87);

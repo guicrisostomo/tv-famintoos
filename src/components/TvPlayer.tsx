@@ -952,6 +952,11 @@ export function TvPlayer({ companyId, displayId }: { companyId: string; displayI
   const outputFrameStyle = {
     '--display-aspect': String(displayPresentation.width / displayPresentation.height),
   } as CSSProperties;
+  const visibleCaptionPosition = current?.caption?.text.trim()
+    ? current.caption.position
+    : current?.overlayText?.trim()
+      ? 'bottom'
+      : null;
 
   const activate = () => {
     const startedAt = performance.now();
@@ -1035,7 +1040,13 @@ export function TvPlayer({ companyId, displayId }: { companyId: string; displayI
             <span>{playbackError.message}</span>
           </div>
         ) : null}
-        {!activeInterruption ? <DateTimeOverlay settings={displayPresentation} /> : null}
+        {!activeInterruption ? (
+          <DateTimeOverlay
+            settings={displayPresentation}
+            captionPosition={visibleCaptionPosition}
+            watermarkVisible={Boolean(current.watermark?.enabled)}
+          />
+        ) : null}
         {activeInterruption ? <CallOverlay interruption={activeInterruption} /> : null}
       </div>
       {!activated ? (
