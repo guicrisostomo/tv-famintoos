@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { CaptionAnimation, CaptionDisplayStyle, CaptionFontFamily, CaptionFontSize, CaptionPosition } from '../domain/caption'
 import type { WatermarkStyle } from '../domain/watermark'
+import type { TvDateTimePosition, TvDateTimeTheme, TvDisplayMode } from '../domain/display'
 import { supabase } from '../services/supabase'
+
+export type { TvDateTimePosition, TvDateTimeTheme, TvDisplayMode } from '../domain/display'
 
 export interface TvDisplayRecord {
   id: string
@@ -14,6 +17,16 @@ export interface TvDisplayRecord {
   continuous_audio_media_id: string | null
   continuous_audio_volume: number
   continuous_audio_media?: TvMediaRecord | null
+  display_mode: TvDisplayMode
+  display_width: number
+  display_height: number
+  datetime_enabled: boolean
+  datetime_show_date: boolean
+  datetime_show_time: boolean
+  datetime_show_seconds: boolean
+  datetime_position: TvDateTimePosition
+  datetime_theme: TvDateTimeTheme
+  datetime_time_zone: string
 }
 export type ImageAnimation = 'none' | 'zoom_in' | 'zoom_out' | 'pan_left' | 'pan_right'
 export type TvImageFit = 'contain' | 'cover' | 'fill' | 'blur_background'
@@ -36,7 +49,7 @@ export function useTvData(companyId: string) {
     if (!supabase) { setError('Supabase não configurado.'); setLoading(false); return }
     setLoading(true); setError(null)
     const [displayResult, playlistResult, mediaResult] = await Promise.all([
-      supabase.from('tv_displays').select('id,company_id,name,description,is_active,sound_enabled,continuous_audio_enabled,continuous_audio_media_id,continuous_audio_volume,continuous_audio_media:tv_media!tv_displays_continuous_audio_media_id_fkey(id,company_id,title,media_type,media_url,message_text,duration_seconds,public_url,storage_provider,storage_key,file_size,created_at)').eq('company_id', companyId).order('name'),
+      supabase.from('tv_displays').select('id,company_id,name,description,is_active,sound_enabled,continuous_audio_enabled,continuous_audio_media_id,continuous_audio_volume,display_mode,display_width,display_height,datetime_enabled,datetime_show_date,datetime_show_time,datetime_show_seconds,datetime_position,datetime_theme,datetime_time_zone,continuous_audio_media:tv_media!tv_displays_continuous_audio_media_id_fkey(id,company_id,title,media_type,media_url,message_text,duration_seconds,public_url,storage_provider,storage_key,file_size,created_at)').eq('company_id', companyId).order('name'),
       supabase.from('tv_playlist_items').select(`id,display_id,media_id,position,is_active,image_fit,${playlistCaptionSelect},${playlistPresentationSelect},sound_media_id,sound_volume,sound_loop,mute_original_audio,media:tv_media!tv_playlist_items_media_id_fkey(id,title,media_type,media_url,message_text,duration_seconds,public_url,storage_provider,storage_key,animation,starts_at,ends_at,weekdays,start_time,end_time),sound_media:tv_media!tv_playlist_items_sound_media_id_fkey(id,title,media_type,media_url,message_text,duration_seconds,public_url,storage_provider,animation)`).eq('company_id', companyId).order('position'),
       supabase.from('tv_media').select('id,company_id,title,media_type,media_url,message_text,duration_seconds,public_url,storage_provider,animation,storage_key,file_size,r2_asset_id,created_at').eq('company_id', companyId).order('created_at', { ascending: false }),
     ])

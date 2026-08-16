@@ -1,6 +1,13 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
 import type { Interruption, PlayerPayload } from '../domain/tv';
 import { captionSettingsFromRecord } from '../domain/caption';
+import {
+  displayPresentationEqual,
+  normalizeDisplayPresentation,
+  readDisplayPresentation,
+  saveDisplayPresentation,
+  type DisplayPresentationSettings,
+} from '../domain/display';
 import { useDeploymentRefresh } from '../hooks/useDeploymentRefresh';
 import { playlistCaptionSelect, playlistPresentationSelect, type TvPlaylistRecord } from '../hooks/useTvData';
 import { isPlayableMedia, playVideoElement, resolveMediaUrl } from '../services/media';
@@ -16,6 +23,7 @@ import { supabase } from '../services/supabase';
 import { tvAudioService, type TvAudioDiagnostics } from '../services/tvAudioService';
 import { TvPlayerRuntime, type TvPlayerDiagnostics } from '../services/tvPlayerRuntime';
 import { TvMediaStage } from './TvMediaStage';
+import { DateTimeOverlay } from './DateTimeOverlay';
 
 const activationKey = (displayId: string) => `famintoos-tv:activated:${displayId}`;
 const processedCallsKey = (displayId: string) => `famintoos-tv:processed-calls:${displayId}`;
@@ -44,6 +52,9 @@ export function TvPlayer({ companyId, displayId }: { companyId: string; displayI
     message: string;
   } | null>(null);
   const [soundEnabled, setSoundEnabled] = useState(true);
+  const [displayPresentation, setDisplayPresentation] = useState<DisplayPresentationSettings>(() =>
+    readDisplayPresentation(displayId),
+  );
   const [continuousAudio, setContinuousAudio] = useState<{
     id: string;
     title: string;
@@ -170,7 +181,7 @@ export function TvPlayer({ companyId, displayId }: { companyId: string; displayI
           .order('requested_at'),
         supabase
           .from('tv_displays')
-          .select('sound_enabled,continuous_audio_enabled,continuous_audio_media_id,continuous_audio_volume,continuous_audio_media:tv_media!tv_displays_continuous_audio_media_id_fkey(id,title,media_url,public_url)')
+          .select('sound_enabled,continuous_audio_enabled,continuous_audio_media_id,continuous_audio_volume,display_mode,display_width,display_height,datetime_enabled,datetime_show_date,datetime_show_time,datetime_show_seconds,datetime_position,datetime_theme,datetime_time_zone,continuous_audio_media:tv_media!tv_displays_continuous_audio_media_id_fkey(id,title,media_url,public_url)')
           .eq('company_id', companyId)
           .eq('id', displayId)
           .single(),
@@ -192,6 +203,16 @@ export function TvPlayer({ companyId, displayId }: { companyId: string; displayI
         continuous_audio_enabled?: boolean;
         continuous_audio_volume?: number;
         continuous_audio_media?: { id: string; title: string; media_url: string | null; public_url: string | null } | null;
+        display_mode?: DisplayPresentationSettings['mode'];
+        display_width?: number;
+        display_height?: number;
+        datetime_enabled?: boolean;
+        datetime_show_date?: boolean;
+        datetime_show_time?: boolean;
+        datetime_show_seconds?: boolean;
+        datetime_position?: DisplayPresentationSettings['dateTimePosition'];
+        datetime_theme?: DisplayPresentationSettings['dateTimeTheme'];
+        datetime_time_zone?: string;
       };
       const nextSoundEnabled = displaySettings?.sound_enabled ?? true;
       const displayTrack = displaySettings?.continuous_audio_media;
@@ -212,6 +233,22 @@ export function TvPlayer({ companyId, displayId }: { companyId: string; displayI
       setCallSettings(nextCallSettings);
       setBusinessName(businessResult.data?.name ?? '');
       setSoundEnabled(nextSoundEnabled);
+      if (displaySettings && !displayResult.error) {
+        const nextDisplayPresentation = normalizeDisplayPresentation({
+          mode: displaySettings.display_mode,
+          width: displaySettings.display_width,
+          height: displaySettings.display_height,
+          dateTimeEnabled: displaySettings.datetime_enabled,
+          showDate: displaySettings.datetime_show_date,
+          showTime: displaySettings.datetime_show_time,
+          showSeconds: displaySettings.datetime_show_seconds,
+          dateTimePosition: displaySettings.datetime_position,
+          dateTimeTheme: displaySettings.datetime_theme,
+          timeZone: displaySettings.datetime_time_zone,
+        });
+        setDisplayPresentation((current) => displayPresentationEqual(current, nextDisplayPresentation) ? current : nextDisplayPresentation);
+        saveDisplayPresentation(displayId, nextDisplayPresentation);
+      }
       setContinuousAudio((current) =>
         current?.id === nextContinuousAudio?.id &&
         current?.url === nextContinuousAudio?.url &&
@@ -911,6 +948,11 @@ export function TvPlayer({ companyId, displayId }: { companyId: string; displayI
     return () => runtime.clear(timer);
   }, [activated, activeInterruption, advanceToNext, current, runtime]);
 
+  const screenClassName = `tv-screen${displayPresentation.mode === 'led' ? ' tv-screen-led' : ''}`;
+  const outputFrameStyle = {
+    '--display-aspect': String(displayPresentation.width / displayPresentation.height),
+  } as CSSProperties;
+
   const activate = () => {
     const startedAt = performance.now();
     setActivating(true);
@@ -944,11 +986,14 @@ export function TvPlayer({ companyId, displayId }: { companyId: string; displayI
   };
   if (!current)
     return (
-      <main className="tv-screen" aria-label="TV sem programação">
+      <main className={screenClassName} aria-label="TV sem programação">
+        <div className="tv-output-frame" style={outputFrameStyle}>
+          {!activeInterruption ? <DateTimeOverlay settings={displayPresentation} /> : null}
+          {activeInterruption ? <CallOverlay interruption={activeInterruption} /> : null}
+        </div>
         {!activated ? (
           <AudioUnlock onClick={activate} activating={activating} error={activationError} />
         ) : null}
-        {activeInterruption ? <CallOverlay interruption={activeInterruption} /> : null}
         {diagnosticMode ? (
           <AudioDiagnostic
             diagnostics={audioDiagnostics}
@@ -960,36 +1005,39 @@ export function TvPlayer({ companyId, displayId }: { companyId: string; displayI
     );
 
   return (
-    <main className="tv-screen">
-      <TvMediaStage
-        item={current}
-        playbackRun={playbackCycle}
-        resumeSeconds={
-          playbackCycle === 0 && initialPlayback?.itemId === current.id
-            ? initialPlayback.elapsedSeconds
-            : 0
-        }
-        videoRef={videoRef}
-        soundEnabled={soundEnabled}
-        audioActivated={activated}
-        playbackEnabled={activated && !activeInterruption}
-        onVideoEvent={handleVideoEvent}
-        onEnded={handleMediaEnded}
-        onError={handleMediaError}
-      />
-      {videoRecovery?.mediaId === current.media.id ? (
-        <div className={`video-recovery${videoRecovery.failed ? ' failed' : ''}`} role="status">
-          <strong>{videoRecovery.failed ? 'Vídeo indisponível' : 'Otimizando vídeo'}</strong>
-          <span>{videoRecovery.message}</span>
-        </div>
-      ) : null}
-      {playbackError?.itemId === current.id ? (
-        <div className="video-recovery failed" role="alert">
-          <strong>Conteúdo indisponível</strong>
-          <span>{playbackError.message}</span>
-        </div>
-      ) : null}
-      {activeInterruption ? <CallOverlay interruption={activeInterruption} /> : null}
+    <main className={screenClassName}>
+      <div className="tv-output-frame" style={outputFrameStyle}>
+        <TvMediaStage
+          item={current}
+          playbackRun={playbackCycle}
+          resumeSeconds={
+            playbackCycle === 0 && initialPlayback?.itemId === current.id
+              ? initialPlayback.elapsedSeconds
+              : 0
+          }
+          videoRef={videoRef}
+          soundEnabled={soundEnabled}
+          audioActivated={activated}
+          playbackEnabled={activated && !activeInterruption}
+          onVideoEvent={handleVideoEvent}
+          onEnded={handleMediaEnded}
+          onError={handleMediaError}
+        />
+        {videoRecovery?.mediaId === current.media.id ? (
+          <div className={`video-recovery${videoRecovery.failed ? ' failed' : ''}`} role="status">
+            <strong>{videoRecovery.failed ? 'Vídeo indisponível' : 'Otimizando vídeo'}</strong>
+            <span>{videoRecovery.message}</span>
+          </div>
+        ) : null}
+        {playbackError?.itemId === current.id ? (
+          <div className="video-recovery failed" role="alert">
+            <strong>Conteúdo indisponível</strong>
+            <span>{playbackError.message}</span>
+          </div>
+        ) : null}
+        {!activeInterruption ? <DateTimeOverlay settings={displayPresentation} /> : null}
+        {activeInterruption ? <CallOverlay interruption={activeInterruption} /> : null}
+      </div>
       {!activated ? (
         <AudioUnlock onClick={activate} activating={activating} error={activationError} />
       ) : null}
