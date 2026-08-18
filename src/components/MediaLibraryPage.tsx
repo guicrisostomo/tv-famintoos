@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { Cloud, FileImage, LoaderCircle, MessageSquareText, Music2, Trash2, Video } from "lucide-react";
 import type { TvDisplayRecord, TvMediaRecord, TvPlaylistRecord } from "../hooks/useTvData";
 import { deleteTvMedia } from "../services/storage";
+import { ActionDialog } from "./ActionDialog";
 
 const formatSize = (bytes?: number | null) => bytes
   ? new Intl.NumberFormat("pt-BR", { style: "unit", unit: bytes >= 1024 ** 2 ? "megabyte" : "kilobyte", maximumFractionDigits: 1 }).format(bytes / (bytes >= 1024 ** 2 ? 1024 ** 2 : 1024))
@@ -9,6 +10,7 @@ const formatSize = (bytes?: number | null) => bytes
 
 export function MediaLibraryPage({ media, items, displays, onReload }: { media: TvMediaRecord[]; items: TvPlaylistRecord[]; displays: TvDisplayRecord[]; onReload: () => Promise<void> }) {
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [pendingMedia, setPendingMedia] = useState<TvMediaRecord | null>(null);
   const [error, setError] = useState<string | null>(null);
   const usage = useMemo(() => {
     const counts = new Map<string, number>();
@@ -25,12 +27,9 @@ export function MediaLibraryPage({ media, items, displays, onReload }: { media: 
   }, [displays, items]);
 
   const remove = async (item: TvMediaRecord) => {
-    const used = usage.get(item.id) ?? 0;
-    const warning = used ? `Esta mídia está em ${used} TV(s) e será removida dessas programações. Continuar?` : "Excluir esta mídia permanentemente, inclusive do Cloudflare R2?";
-    if (!window.confirm(warning)) return;
     setDeleting(item.id);
     setError(null);
-    try { await deleteTvMedia(item.id); await onReload(); }
+    try { await deleteTvMedia(item.id); setPendingMedia(null); await onReload(); }
     catch (caught) { setError(caught instanceof Error ? caught.message : "Não foi possível excluir a mídia."); }
     finally { setDeleting(null); }
   };
@@ -55,13 +54,25 @@ export function MediaLibraryPage({ media, items, displays, onReload }: { media: 
                 <article className="media-card" key={item.id}>
                   <div className="media-thumb">{item.media_type === "image" && url ? <img src={url} alt="" /> : item.media_type === "video" && url ? <video src={url} preload="metadata" muted playsInline /> : <Icon size={30} />}</div>
                   <div className="media-card-copy"><strong>{item.title}</strong><span>{typeName} · {formatSize(item.file_size)}</span><span>{used > 0 ? `Em uso em ${used} TV(s)` : "Sem uso · elegível após 7 dias"}</span></div>
-                  <button className="icon-button danger" onClick={() => void remove(item)} disabled={deleting === item.id} aria-label={`Excluir ${item.title}`}>{deleting === item.id ? <LoaderCircle className="spin" size={16} /> : <Trash2 size={16} />}</button>
+                  <button className="icon-button danger" onClick={() => setPendingMedia(item)} disabled={deleting === item.id} aria-label={`Excluir ${item.title}`}>{deleting === item.id ? <LoaderCircle className="spin" size={16} /> : <Trash2 size={16} />}</button>
                 </article>
               );
             })}
           </div>
         )}
       </section>
+      <ActionDialog
+        open={Boolean(pendingMedia)}
+        title={`Excluir “${pendingMedia?.title ?? 'mídia'}” permanentemente?`}
+        description={(usage.get(pendingMedia?.id ?? '') ?? 0) > 0
+          ? <p>Esta mídia está em <strong>{usage.get(pendingMedia?.id ?? '')} programação(ões)</strong> e será removida delas e também do Cloudflare R2.</p>
+          : <p>O arquivo será apagado da biblioteca e do Cloudflare R2. Esta ação não pode ser desfeita.</p>}
+        actions={[{ value: 'delete', label: 'Excluir mídia', variant: 'danger' }]}
+        busy={Boolean(deleting)}
+        busyLabel="Excluindo..."
+        onAction={() => { if (pendingMedia) void remove(pendingMedia) }}
+        onClose={() => setPendingMedia(null)}
+      />
     </>
   );
 }

@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react";
-import { Clock, ExternalLink, LoaderCircle, Maximize2, Monitor, Music2, Plus, Save, Settings2, Volume2, VolumeX } from "lucide-react";
+import { Clock, ExternalLink, Eye, EyeOff, LoaderCircle, Maximize2, Monitor, Music2, Plus, Save, Settings2, Volume2, VolumeX } from "lucide-react";
 import { DateTimeOverlay } from "./DateTimeOverlay";
 import { normalizeDisplayPresentation, type DisplayPresentationSettings, type TvDisplayMode } from "../domain/display";
 import type { TvDisplayRecord } from "../hooks/useTvData";
@@ -7,6 +7,7 @@ import { supabase } from "../services/supabase";
 import { AudioPlaylistEditor } from "./AudioPlaylistEditor";
 import type { AudioPlaylistSettings } from "../domain/audioPlaylist";
 import { replaceAudioPlaylistTracks } from "../services/audioPlaylist";
+import { useHiddenDisplays } from "../hooks/useHiddenDisplays";
 
 const DISPLAY_PRESETS = [
   { label: "Full HD horizontal", width: 1920, height: 1080 },
@@ -34,6 +35,7 @@ export function TvSetupPage({ companyId, displays, onSaved }: { companyId: strin
   const [testingId, setTestingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const { hiddenDisplayIds, toggleDisplay, hideDisplays, showAllDisplays } = useHiddenDisplays(companyId, "tv-settings");
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
@@ -89,31 +91,33 @@ export function TvSetupPage({ companyId, displays, onSaved }: { companyId: strin
           </form>
         </section>
         <section className="card tv-list-card">
-          <div className="section-title"><h2>Telas da empresa</h2><span className="badge">{displays.length}</span></div>
+          <div className="section-title"><div><h2>Telas da empresa</h2><span className="badge">{displays.length}</span></div>{displays.length ? <div className="display-list-visibility"><button type="button" className="button secondary" onClick={() => hideDisplays(displays.map((display) => display.id))}><EyeOff size={15} /> Ocultar informações</button><button type="button" className="button secondary" onClick={showAllDisplays}><Eye size={15} /> Mostrar informações</button></div> : null}</div>
           {displays.length === 0 ? (
             <div className="empty compact"><div><Monitor size={24} /><h3>Nenhuma tela cadastrada</h3><p>Cadastre uma TV ou painel de LED para associar conteúdos.</p></div></div>
           ) : (
             <div className="display-list">
-              {displays.map((display) => (
-                <article className="display-row tv-audio-row" key={display.id}>
+              {displays.map((display) => {
+                const informationHidden = hiddenDisplayIds.has(display.id);
+                return <article className={`display-row tv-audio-row ${informationHidden ? "information-hidden" : ""}`} key={display.id}>
                   <div className="display-summary">
-                    <div><strong>{display.name}</strong><span>{display.description ?? "Sem descrição"}</span></div>
-                    <div className="display-statuses">
+                    <div><strong>{display.name}</strong><span>{informationHidden ? "Informações ocultas neste navegador" : display.description ?? "Sem descrição"}</span></div>
+                    {!informationHidden ? <div className="display-statuses">
                       <span className={`sound-state ${display.display_mode === "led" ? "enabled" : ""}`}><Maximize2 size={13} /> {display.display_mode === "led" ? `LED ${display.display_width}×${display.display_height}` : "TV 16:9"}</span>
                       {display.datetime_enabled ? <span className="sound-state enabled"><Clock size={13} /> Data e hora</span> : null}
                       <span className={`sound-state ${display.sound_enabled ? "enabled" : ""}`}>{display.sound_enabled ? "Som habilitado" : "Som desabilitado"}</span>
                       {display.continuous_audio_enabled ? <span className="sound-state enabled"><Music2 size={13} /> Trilha contínua</span> : null}
-                    </div>
+                    </div> : null}
                   </div>
                   <div className="display-actions">
-                    <button className="button secondary" onClick={() => void toggleSound(display)}>{display.sound_enabled ? <Volume2 size={15} /> : <VolumeX size={15} />} {display.sound_enabled ? "Desativar som" : "Ativar som"}</button>
-                    <button className="button secondary" onClick={() => void testSound(display)} disabled={!display.sound_enabled || testingId === display.id}>{testingId === display.id ? <LoaderCircle className="spin" size={15} /> : <Volume2 size={15} />} Testar som</button>
+                    <button type="button" className="button secondary" onClick={() => toggleDisplay(display.id)}>{informationHidden ? <Eye size={15} /> : <EyeOff size={15} />} {informationHidden ? "Mostrar informações" : "Ocultar informações"}</button>
+                    {!informationHidden ? <><button className="button secondary" onClick={() => void toggleSound(display)}>{display.sound_enabled ? <Volume2 size={15} /> : <VolumeX size={15} />} {display.sound_enabled ? "Desativar som" : "Ativar som"}</button>
+                    <button className="button secondary" onClick={() => void testSound(display)} disabled={!display.sound_enabled || testingId === display.id}>{testingId === display.id ? <LoaderCircle className="spin" size={15} /> : <Volume2 size={15} />} Testar som</button></> : null}
                     <a className="button secondary" href={`/tv/${companyId}/${display.id}`} target="_blank" rel="noreferrer"><ExternalLink size={15} /> Exibir</a>
                   </div>
-                  <DisplaySettingsEditor key={displaySettingsKey(display)} companyId={companyId} display={display} onSaved={onSaved} onError={setError} />
-                  <ContinuousAudioEditor key={`${display.id}:${display.continuous_audio_tracks?.map((track) => `${track.media_id}-${track.position}-${track.volume}`).join(",") ?? "none"}:${display.continuous_audio_enabled}:${display.continuous_audio_volume}:${display.continuous_audio_order}:${display.continuous_audio_repeat}`} companyId={companyId} display={display} onSaved={onSaved} onError={setError} />
+                  {!informationHidden ? <><DisplaySettingsEditor key={displaySettingsKey(display)} companyId={companyId} display={display} onSaved={onSaved} onError={setError} />
+                  <ContinuousAudioEditor key={`${display.id}:${display.continuous_audio_tracks?.map((track) => `${track.media_id}-${track.position}-${track.volume}`).join(",") ?? "none"}:${display.continuous_audio_enabled}:${display.continuous_audio_volume}:${display.continuous_audio_order}:${display.continuous_audio_repeat}`} companyId={companyId} display={display} onSaved={onSaved} onError={setError} /></> : null}
                 </article>
-              ))}
+              })}
             </div>
           )}
         </section>

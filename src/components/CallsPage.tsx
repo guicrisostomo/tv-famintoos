@@ -10,6 +10,7 @@ import {
 } from '../services/speechService';
 import { supabase } from '../services/supabase';
 import { tvAudioService } from '../services/tvAudioService';
+import { ActionDialog } from './ActionDialog';
 
 const statusLabel: Record<TvCallRecord['status'], string> = {
   pending: 'Aguardando a TV',
@@ -37,6 +38,7 @@ export function CallsPage({
   const [selectedDisplays, setSelectedDisplays] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [clearing, setClearing] = useState(false);
+  const [confirmClear, setConfirmClear] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [templateId, setTemplateId] = useState<string | null>(null);
   const [settings, setSettings] = useState(defaultCallSpeechSettings);
@@ -181,8 +183,7 @@ export function CallsPage({
     }
   };
   const clearHistory = async () => {
-    if (!supabase || !calls.length || !window.confirm('Limpar todo o histórico de chamadas?'))
-      return;
+    if (!supabase || !calls.length || clearing) return;
     setClearing(true);
     const { data, error: deleteError } = await supabase
       .from('tv_calls')
@@ -191,7 +192,7 @@ export function CallsPage({
       .select('id');
     if (deleteError || !data?.length)
       setError(deleteError?.message ?? 'A limpeza não foi autorizada.');
-    else await onReload();
+    else { setConfirmClear(false); await onReload(); }
     setClearing(false);
   };
   const update = <K extends keyof CallSpeechSettings>(key: K, value: CallSpeechSettings[K]) =>
@@ -452,7 +453,7 @@ export function CallsPage({
             </div>
             <button
               className="button danger"
-              onClick={() => void clearHistory()}
+              onClick={() => setConfirmClear(true)}
               disabled={clearing}
             >
               {clearing ? <LoaderCircle className="spin" size={16} /> : <Trash2 size={16} />} Limpar
@@ -486,6 +487,16 @@ export function CallsPage({
       ) : loading ? (
         <div className="loading-inline">Carregando chamadas...</div>
       ) : null}
+      <ActionDialog
+        open={confirmClear}
+        title="Limpar histórico de chamadas?"
+        description={<p>As {calls.length} chamadas registradas nesta empresa serão apagadas. Esta ação não pode ser desfeita.</p>}
+        actions={[{ value: 'clear', label: 'Limpar histórico', variant: 'danger' }]}
+        busy={clearing}
+        busyLabel="Limpando..."
+        onAction={() => void clearHistory()}
+        onClose={() => setConfirmClear(false)}
+      />
     </>
   );
 }

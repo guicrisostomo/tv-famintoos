@@ -9,6 +9,7 @@ import { ContentComposer } from './ContentComposer'
 import { EditProgrammingItem } from './EditProgrammingItem'
 import { PreviewPanel } from './PreviewPanel'
 import { hasItemSchedule, isItemScheduledOnDate } from './programSchedule'
+import { ActionDialog } from './ActionDialog'
 
 const hasSchedule = hasItemSchedule
 const BulkAppearancePage = lazy(() => import('./BulkAppearancePage'))
@@ -19,6 +20,8 @@ export function ProgrammingPage({ companyId, displays, items, onReload }: { comp
   const [bulkAppearanceOpen, setBulkAppearanceOpen] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [selectedDisplay, setSelectedDisplay] = useState('')
+  const [pendingRemoval, setPendingRemoval] = useState<TvPlaylistRecord | null>(null)
+  const [removing, setRemoving] = useState(false)
   const todayItems = useMemo(() => items.filter(item => isItemScheduledOnDate(item, new Date())), [items])
   const visibleItems = selectedDisplay ? todayItems.filter(item => item.display_id === selectedDisplay) : todayItems
   const selectedTv = displays.find(display => display.id === selectedDisplay)
@@ -38,22 +41,26 @@ export function ProgrammingPage({ companyId, displays, items, onReload }: { comp
     await onReload()
   }
 
-  const removeItem = async (item: TvPlaylistRecord) => {
-    if (!supabase || !window.confirm(`Excluir “${item.media.title}” da programação de todas as TVs?`)) return
+  const removeItem = async (item: TvPlaylistRecord, scope: 'display' | 'all') => {
+    if (!supabase || removing) return
+    setRemoving(true)
     setError(null)
-    const { data, error: deleteError } = await supabase.from('tv_playlist_items').delete().eq('media_id', item.media_id).eq('company_id', companyId).select('id')
-    if (deleteError) { setError(deleteError.message); return }
-    if (!data?.length) { setError('Conteúdo não encontrado ou remoção não autorizada.'); return }
-    await onReload()
+    let request = supabase.from('tv_playlist_items').delete().eq('company_id', companyId).eq('media_id', item.media_id)
+    if (scope === 'display') request = request.eq('display_id', item.display_id)
+    const { data, error: deleteError } = await request.select('id')
+    if (deleteError) setError(deleteError.message)
+    else if (!data?.length) setError('Conteúdo não encontrado ou remoção não autorizada.')
+    else { setPendingRemoval(null); await onReload() }
+    setRemoving(false)
   }
-  const removeItemById = async (id: string) => {
+  const requestRemoveItem = (id: string) => {
     const item = items.find(candidate => candidate.id === id)
-    if (item) await removeItem(item)
+    if (item) setPendingRemoval(item)
   }
 
   const contentList = (list: TvPlaylistRecord[], showTvName: boolean) => <DndContext sensors={sensors} onDragEnd={moveItem}>
     <SortableContext items={list} strategy={verticalListSortingStrategy}>
-      <div className="timeline">{list.map(item => <SortableItem key={item.id} item={item} displayName={showTvName ? displayNames.get(item.display_id) : undefined} canReorder={Boolean(selectedDisplay)} onEdit={setEditingItem} onRemove={removeItemById}/>)}</div>
+      <div className="timeline">{list.map(item => <SortableItem key={item.id} item={item} displayName={showTvName ? displayNames.get(item.display_id) : undefined} canReorder={Boolean(selectedDisplay)} onEdit={setEditingItem} onRemove={requestRemoveItem}/>)}</div>
     </SortableContext>
   </DndContext>
 
@@ -70,10 +77,23 @@ export function ProgrammingPage({ companyId, displays, items, onReload }: { comp
 
     {composerOpen ? <ContentComposer companyId={companyId} displays={displays} items={items} onClose={() => setComposerOpen(false)} onSaved={onReload}/> : null}
     {editingItem ? <EditProgrammingItem companyId={companyId} displays={displays} items={items} item={editingItem} onClose={() => setEditingItem(null)} onSaved={onReload}/> : null}
+    <ActionDialog
+      open={Boolean(pendingRemoval)}
+      title={`Remover “${pendingRemoval?.media.title ?? 'conteúdo'}”?`}
+      description={<p>Escolha se deseja remover somente de <strong>{displayNames.get(pendingRemoval?.display_id ?? '') ?? 'esta TV'}</strong> ou de todas as TVs que usam este conteúdo.</p>}
+      busy={removing}
+      busyLabel="Removendo..."
+      actions={[
+        { value: 'display', label: 'Somente desta TV', variant: 'primary' },
+        { value: 'all', label: 'De todas as TVs', variant: 'danger' },
+      ]}
+      onAction={(scope) => { if (pendingRemoval) void removeItem(pendingRemoval, scope) }}
+      onClose={() => setPendingRemoval(null)}
+    />
   </>
 }
 
-function SortableItem({ item, displayName, canReorder, onEdit, onRemove }: { item: TvPlaylistRecord; displayName?: string; canReorder: boolean; onEdit: (item: TvPlaylistRecord) => void; onRemove: (id: string) => Promise<void> }) {
+function SortableItem({ item, displayName, canReorder, onEdit, onRemove }: { item: TvPlaylistRecord; displayName?: string; canReorder: boolean; onEdit: (item: TvPlaylistRecord) => void; onRemove: (id: string) => void }) {
   const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: item.id, disabled: !canReorder })
   const typeLabel = item.media.media_type === 'message' ? 'Texto' : item.media.media_type === 'video' ? 'Vídeo' : 'Imagem'
   const mediaUrl = item.media.public_url ?? item.media.media_url

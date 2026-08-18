@@ -3,6 +3,8 @@ import {
   ChevronLeft,
   ChevronRight,
   Clock3,
+  Eye,
+  EyeOff,
   Image,
   MessageSquareText,
   Video,
@@ -10,15 +12,30 @@ import {
 import { useMemo, useState } from 'react';
 import type { TvDisplayRecord, TvPlaylistRecord } from '../hooks/useTvData';
 import { isItemScheduledOnDate } from './programSchedule';
+import { useHiddenDisplays } from '../hooks/useHiddenDisplays';
 
 export function PlannerPage({
+  companyId,
   displays,
   items,
 }: {
+  companyId: string;
   displays: TvDisplayRecord[];
   items: TvPlaylistRecord[];
 }) {
   const [offset, setOffset] = useState(0);
+  const [visibilityOpen, setVisibilityOpen] = useState(false);
+  const { hiddenDisplayIds, toggleDisplay, hideDisplays, showAllDisplays } = useHiddenDisplays(companyId, 'planner');
+  const visibleDisplays = displays.filter((display) => !hiddenDisplayIds.has(display.id));
+  const itemsByDisplay = useMemo(() => {
+    const grouped = new Map<string, TvPlaylistRecord[]>();
+    for (const item of items) {
+      const group = grouped.get(item.display_id) ?? [];
+      group.push(item);
+      grouped.set(item.display_id, group);
+    }
+    return grouped;
+  }, [items]);
   const days = useMemo(
     () =>
       Array.from({ length: 7 }, (_, index) => {
@@ -37,6 +54,9 @@ export function PlannerPage({
           <p>Veja o que cada TV exibirá hoje e nos próximos dias.</p>
         </div>
         <div className="planner-navigation">
+          <button className="button secondary" onClick={() => setVisibilityOpen((current) => !current)} aria-expanded={visibilityOpen}>
+            <Eye size={16} /> TVs visíveis ({visibleDisplays.length}/{displays.length})
+          </button>
           <button
             className="icon-button"
             onClick={() => setOffset((current) => current - 7)}
@@ -57,6 +77,13 @@ export function PlannerPage({
         </div>
       </div>
       <section className="card planner-card">
+        {visibilityOpen ? (
+          <div className="display-visibility-panel">
+            <div><strong>TVs exibidas no planejamento</strong><span>Esta preferência fica salva somente neste navegador.</span></div>
+            <div className="display-visibility-actions"><button type="button" className="button secondary" onClick={showAllDisplays}>Mostrar todas</button><button type="button" className="button secondary" onClick={() => hideDisplays(displays.map((display) => display.id))}>Ocultar todas</button></div>
+            <div className="check-grid">{displays.map((display) => <label key={display.id}><input type="checkbox" checked={!hiddenDisplayIds.has(display.id)} onChange={() => toggleDisplay(display.id)} /> {display.name}</label>)}</div>
+          </div>
+        ) : null}
         <div
           className="planner-grid"
           style={{ '--planner-days': days.length } as React.CSSProperties}
@@ -80,12 +107,13 @@ export function PlannerPage({
               </strong>
             </header>
           ))}
-          {displays.map((display) => (
+          {visibleDisplays.map((display) => (
             <PlannerRow
               key={display.id}
               display={display}
               days={days}
-              items={items.filter((item) => item.display_id === display.id)}
+              items={itemsByDisplay.get(display.id) ?? []}
+              onHide={() => toggleDisplay(display.id)}
             />
           ))}
         </div>
@@ -96,6 +124,9 @@ export function PlannerPage({
               <p>Cadastre uma televisão para montar o planner.</p>
             </div>
           </div>
+        ) : null}
+        {displays.length > 0 && !visibleDisplays.length ? (
+          <div className="empty compact"><div><EyeOff size={24} /><h3>Todas as TVs estão ocultas</h3><p>Mostre as TVs que deseja acompanhar neste planejamento.</p><button type="button" className="button primary" onClick={showAllDisplays}>Mostrar todas as TVs</button></div></div>
         ) : null}
       </section>
       <div className="planner-legend">
@@ -114,16 +145,18 @@ function PlannerRow({
   display,
   days,
   items,
+  onHide,
 }: {
   display: TvDisplayRecord;
   days: Date[];
   items: TvPlaylistRecord[];
+  onHide: () => void;
 }) {
   return (
     <>
       <aside className="planner-tv">
-        <strong>{display.name}</strong>
-        <span>{display.description ?? 'Sem descrição'}</span>
+        <div><strong>{display.name}</strong><span>{display.description ?? 'Sem descrição'}</span></div>
+        <button type="button" className="icon-button" onClick={onHide} aria-label={`Ocultar ${display.name} do planejamento`} title="Ocultar do planejamento"><EyeOff size={14} /></button>
       </aside>
       {days.map((day) => {
         const dayItems = items

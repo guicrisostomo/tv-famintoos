@@ -180,7 +180,7 @@ export function AdminShell({
             />
           ) : null}
           {page === 'Planejamento' ? (
-            <PlannerPage displays={tvData.displays} items={tvData.items} />
+            <PlannerPage companyId={profile.companyId} displays={tvData.displays} items={tvData.items} />
           ) : null}
           {page === 'Chamadas' ? (
             <CallsPage
