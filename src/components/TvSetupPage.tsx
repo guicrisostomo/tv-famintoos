@@ -4,7 +4,9 @@ import { DateTimeOverlay } from "./DateTimeOverlay";
 import { normalizeDisplayPresentation, type DisplayPresentationSettings, type TvDisplayMode } from "../domain/display";
 import type { TvDisplayRecord } from "../hooks/useTvData";
 import { supabase } from "../services/supabase";
-import { SoundPicker, type SoundSettings } from "./SoundPicker";
+import { AudioPlaylistEditor } from "./AudioPlaylistEditor";
+import type { AudioPlaylistSettings } from "../domain/audioPlaylist";
+import { replaceAudioPlaylistTracks } from "../services/audioPlaylist";
 
 const DISPLAY_PRESETS = [
   { label: "Full HD horizontal", width: 1920, height: 1080 },
@@ -109,7 +111,7 @@ export function TvSetupPage({ companyId, displays, onSaved }: { companyId: strin
                     <a className="button secondary" href={`/tv/${companyId}/${display.id}`} target="_blank" rel="noreferrer"><ExternalLink size={15} /> Exibir</a>
                   </div>
                   <DisplaySettingsEditor key={displaySettingsKey(display)} companyId={companyId} display={display} onSaved={onSaved} onError={setError} />
-                  <ContinuousAudioEditor key={`${display.id}:${display.continuous_audio_media_id ?? "none"}:${display.continuous_audio_enabled}:${display.continuous_audio_volume}`} companyId={companyId} display={display} onSaved={onSaved} onError={setError} />
+                  <ContinuousAudioEditor key={`${display.id}:${display.continuous_audio_tracks?.map((track) => `${track.media_id}-${track.position}-${track.volume}`).join(",") ?? "none"}:${display.continuous_audio_enabled}:${display.continuous_audio_volume}:${display.continuous_audio_order}:${display.continuous_audio_repeat}`} companyId={companyId} display={display} onSaved={onSaved} onError={setError} />
                 </article>
               ))}
             </div>
@@ -205,16 +207,30 @@ function DisplaySettingsEditor({ companyId, display, onSaved, onError }: { compa
 
 function ContinuousAudioEditor({ companyId, display, onSaved, onError }: { companyId: string; display: TvDisplayRecord; onSaved: () => Promise<void>; onError: (message: string | null) => void }) {
   const [enabled, setEnabled] = useState(display.continuous_audio_enabled);
-  const [sound, setSound] = useState<SoundSettings>({ mediaId: display.continuous_audio_media_id, media: display.continuous_audio_media ?? null, volume: Number(display.continuous_audio_volume ?? 0.7), loop: true, muteOriginalAudio: false, videoAudioMode: "original" });
+  const [playlist, setPlaylist] = useState<AudioPlaylistSettings>(() => ({
+    tracks: display.continuous_audio_tracks?.length
+      ? display.continuous_audio_tracks.map((track) => ({ id: track.id, mediaId: track.media_id, media: track.media, volume: Number(track.volume ?? 1) }))
+      : display.continuous_audio_media ? [{ mediaId: display.continuous_audio_media.id, media: display.continuous_audio_media, volume: 1 }] : [],
+    volume: Number(display.continuous_audio_volume ?? 0.7),
+    order: display.continuous_audio_order ?? "sequential",
+    repeat: display.continuous_audio_repeat ?? "all",
+    videoAudioMode: "original",
+  }));
   const [saving, setSaving] = useState(false);
 
   const save = async () => {
     if (!supabase) return;
-    if (enabled && !sound.mediaId) { onError("Escolha ou envie uma faixa antes de ativar a trilha contínua."); return; }
+    if (enabled && !playlist.tracks.length) { onError("Escolha ao menos uma música antes de ativar a trilha contínua."); return; }
     setSaving(true); onError(null);
-    const { error } = await supabase.from("tv_displays").update({ continuous_audio_enabled: enabled, continuous_audio_media_id: sound.mediaId, continuous_audio_volume: sound.volume, ...(enabled ? { sound_enabled: true } : {}) }).eq("id", display.id).eq("company_id", companyId);
-    if (error) onError(error.message);
-    else await onSaved();
+    const firstTrack = playlist.tracks[0] ?? null;
+    const { error } = await supabase.from("tv_displays").update({ continuous_audio_enabled: enabled, continuous_audio_media_id: firstTrack?.mediaId ?? null, continuous_audio_volume: playlist.volume, continuous_audio_order: playlist.order, continuous_audio_repeat: playlist.repeat, ...(enabled ? { sound_enabled: true } : {}) }).eq("id", display.id).eq("company_id", companyId);
+    try {
+      if (error) throw error;
+      await replaceAudioPlaylistTracks({ companyId, displayId: display.id, tracks: playlist.tracks });
+      await onSaved();
+    } catch (caught) {
+      onError(caught instanceof Error ? caught.message : "Não foi possível salvar a playlist de músicas.");
+    }
     setSaving(false);
   };
 
@@ -223,7 +239,7 @@ function ContinuousAudioEditor({ companyId, display, onSaved, onError }: { compa
       <summary><Music2 size={17} /><span><strong>Áudio contínuo</strong><small>Uma trilha durante toda a programação</small></span></summary>
       <div className="continuous-audio-body">
         <label className="continuous-audio-toggle"><input type="checkbox" checked={enabled} onChange={(event) => setEnabled(event.target.checked)} /><span><strong>Usar trilha contínua nesta TV</strong><small>Ao ativar, o som original dos vídeos e os sons individuais dos conteúdos ficam silenciados.</small></span></label>
-        <SoundPicker companyId={companyId} value={sound} isVideo={false} onChange={setSound} legend="Faixa contínua" hint="Escolha uma faixa da biblioteca, envie um arquivo ou use um link HTTPS direto." showLoop={false} />
+        <AudioPlaylistEditor companyId={companyId} value={playlist} onChange={setPlaylist} legend="Músicas da TV" hint="Escolha, envie ou cadastre músicas e defina a ordem de reprodução desta TV." />
         <button type="button" className="button primary" onClick={() => void save()} disabled={saving}>{saving ? <LoaderCircle className="spin" size={16} /> : <Save size={16} />} Salvar áudio desta TV</button>
       </div>
     </details>

@@ -14,10 +14,12 @@ export function MediaLibraryPage({ media, items, displays, onReload }: { media: 
     const counts = new Map<string, number>();
     items.forEach((item) => {
       counts.set(item.media_id, (counts.get(item.media_id) ?? 0) + 1);
-      if (item.sound_media_id) counts.set(item.sound_media_id, (counts.get(item.sound_media_id) ?? 0) + 1);
+      const soundtrackIds = item.sound_tracks?.length ? item.sound_tracks.map((track) => track.media_id) : item.sound_media_id ? [item.sound_media_id] : [];
+      soundtrackIds.forEach((mediaId) => counts.set(mediaId, (counts.get(mediaId) ?? 0) + 1));
     });
     displays.forEach((display) => {
-      if (display.continuous_audio_media_id) counts.set(display.continuous_audio_media_id, (counts.get(display.continuous_audio_media_id) ?? 0) + 1);
+      const soundtrackIds = display.continuous_audio_tracks?.length ? display.continuous_audio_tracks.map((track) => track.media_id) : display.continuous_audio_media_id ? [display.continuous_audio_media_id] : [];
+      soundtrackIds.forEach((mediaId) => counts.set(mediaId, (counts.get(mediaId) ?? 0) + 1));
     });
     return counts;
   }, [displays, items]);

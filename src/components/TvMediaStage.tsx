@@ -146,7 +146,8 @@ export function TvMediaStage({
         audioActivated &&
         soundEnabled &&
         !item.muted &&
-        !item.soundtrack?.muteOriginalAudio;
+        !item.soundtrack?.muteOriginalAudio &&
+        !item.audioPlaylist?.muteOriginalAudio;
 
       if (playingSession.current !== sessionKey || video.paused || video.ended) {
         if (video.ended) video.currentTime = 0;

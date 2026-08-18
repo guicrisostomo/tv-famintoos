@@ -10,6 +10,7 @@ export function PreviewPanel({ items }: { items: TvPlaylistRecord[] }) {
   const [playing, setPlaying] = useState(false);
   const currentItem = items[index % Math.max(items.length, 1)];
   const current = currentItem?.media;
+  const previewAudio = currentItem?.sound_tracks?.[0]?.media ?? currentItem?.sound_media;
   const imageUrl = current?.public_url ?? current?.media_url;
   const next = () =>
     setIndex((value) => (value + 1) % Math.max(items.length, 1));
@@ -61,7 +62,7 @@ export function PreviewPanel({ items }: { items: TvPlaylistRecord[] }) {
           <video
             src={imageUrl}
             autoPlay={playing}
-            muted={Boolean(currentItem.mute_original_audio || currentItem.sound_media_id)}
+            muted={Boolean(currentItem.mute_original_audio || currentItem.sound_tracks?.length || currentItem.sound_media_id)}
             playsInline
             controls
           />
@@ -117,8 +118,8 @@ export function PreviewPanel({ items }: { items: TvPlaylistRecord[] }) {
           </button>
         ) : null}
       </div>
-      {currentItem?.sound_media && (currentItem.sound_media.public_url || currentItem.sound_media.media_url) ? (
-        <audio key={`${currentItem.id}-${index}`} src={currentItem.sound_media.public_url ?? currentItem.sound_media.media_url ?? undefined} autoPlay={playing} loop={currentItem.sound_loop ?? true} controls style={{ width: "100%" }} />
+      {previewAudio && (previewAudio.public_url || previewAudio.media_url) ? (
+        <div className="preview-audio"><span>Prévia da primeira música{(currentItem?.sound_tracks?.length ?? 0) > 1 ? ` · ${currentItem?.sound_tracks?.length} faixas na sequência` : ""}</span><audio key={`${currentItem?.id}-${index}`} src={previewAudio.public_url ?? previewAudio.media_url ?? undefined} autoPlay={playing} loop={currentItem?.sound_repeat !== "none"} controls /></div>
       ) : null}
     </section>
   );

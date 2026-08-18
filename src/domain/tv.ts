@@ -1,5 +1,6 @@
 import type { WatermarkStyle } from './watermark'
 import type { CaptionSettings } from './caption'
+import type { AudioPlaybackOrder, AudioRepeatMode } from './audioPlaylist'
 
 export type MediaType = 'image' | 'video' | 'message' | 'qr_code' | 'audio'
 export type StorageProvider = 'cloudflare_r2' | 'supabase_storage' | 'external_url'
@@ -47,6 +48,13 @@ export interface ProgramItem {
     qrValue?: string | null
   }
   soundtrack?: { id: string; title?: string | null; url: string; volume: number; loop: boolean; muteOriginalAudio: boolean } | null
+  audioPlaylist?: {
+    tracks: { id: string; title?: string | null; url: string; volume: number }[]
+    volume: number
+    order: AudioPlaybackOrder
+    repeat: AudioRepeatMode
+    muteOriginalAudio: boolean
+  } | null
   qrCodeUrl?: string | null
 }
 

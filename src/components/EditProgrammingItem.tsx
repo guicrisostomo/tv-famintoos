@@ -9,7 +9,9 @@ import type {
 import { captionDatabaseValues, captionSettingsFromRecord } from "../domain/caption";
 import { supabase } from "../services/supabase";
 import { resolveWatermarkLogo } from "../services/watermarkLogo";
-import { SoundPicker, type SoundSettings } from "./SoundPicker";
+import { AudioPlaylistEditor } from "./AudioPlaylistEditor";
+import type { AudioPlaylistSettings } from "../domain/audioPlaylist";
+import { replaceAudioPlaylistTracks } from "../services/audioPlaylist";
 import { PresentationSettingsFields, type PresentationSettings } from "./PresentationSettingsFields";
 import { ContentScheduleFields } from "./ContentScheduleFields";
 import { scheduleDatabaseValues, type ContentSchedule } from "./contentSchedule";
@@ -50,14 +52,15 @@ export function EditProgrammingItem({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"content" | "appearance" | "schedule" | "tvs">("content");
-  const [sound, setSound] = useState<SoundSettings>({
-    mediaId: item.sound_media_id ?? null,
-    media: item.sound_media ?? null,
+  const [audioPlaylist, setAudioPlaylist] = useState<AudioPlaylistSettings>(() => ({
+    tracks: item.sound_tracks?.length
+      ? item.sound_tracks.map((track) => ({ id: track.id, mediaId: track.media_id, media: track.media, volume: Number(track.volume ?? 1) }))
+      : item.sound_media ? [{ mediaId: item.sound_media.id, media: item.sound_media, volume: 1 }] : [],
     volume: item.sound_volume ?? .7,
-    loop: item.sound_loop ?? true,
-    muteOriginalAudio: item.mute_original_audio ?? false,
-    videoAudioMode: item.media.media_type !== "video" ? "original" : item.sound_media_id ? "replace" : item.mute_original_audio ? "muted" : "original",
-  });
+    order: item.sound_order ?? "sequential",
+    repeat: item.sound_repeat ?? (item.sound_loop === false ? "none" : "all"),
+    videoAudioMode: item.media.media_type !== "video" ? "original" : item.sound_tracks?.length || item.sound_media_id ? "replace" : item.mute_original_audio ? "muted" : "original",
+  }));
   const [presentation, setPresentation] = useState<PresentationSettings>({
     transitionType: item.transition_type ?? "fade",
     transitionDurationMs: item.transition_duration_ms ?? 700,
@@ -91,8 +94,8 @@ export function EditProgrammingItem({
       setError("Selecione pelo menos uma TV.");
       return;
     }
-    if (item.media.media_type === "video" && sound.videoAudioMode === "replace" && !sound.mediaId) {
-      setError("Escolha ou envie o áudio que substituirá o som original do vídeo.");
+    if (item.media.media_type === "video" && audioPlaylist.videoAudioMode === "replace" && !audioPlaylist.tracks.length) {
+      setError("Escolha ao menos uma música para substituir o áudio original do vídeo.");
       return;
     }
     if (!title.trim()) {
@@ -126,6 +129,7 @@ export function EditProgrammingItem({
     setSaving(true);
     setError(null);
     try {
+      const activeAudioTracks = item.media.media_type === "video" && audioPlaylist.videoAudioMode !== "replace" ? [] : audioPlaylist.tracks;
       let resolvedWatermarkLogoMediaId = presentation.watermarkLogoMediaId;
       let resolvedWatermarkLogoUrl = presentation.watermarkLogoUrl.trim();
       if (presentation.watermarkEnabled && !resolvedWatermarkLogoMediaId && resolvedWatermarkLogoUrl) {
@@ -160,10 +164,12 @@ export function EditProgrammingItem({
             image_fit:
               item.media.media_type === "image" ? imageFit : "contain",
             ...captionDatabaseValues(caption, item.media.media_type !== "message"),
-            sound_media_id: item.media.media_type === "video" ? (sound.videoAudioMode === "replace" ? sound.mediaId : null) : sound.mediaId,
-            sound_volume: sound.volume,
-            sound_loop: sound.loop,
-            mute_original_audio: item.media.media_type === "video" ? sound.videoAudioMode !== "original" : false,
+            sound_media_id: activeAudioTracks[0]?.mediaId ?? null,
+            sound_volume: audioPlaylist.volume,
+            sound_loop: audioPlaylist.repeat !== "none",
+            sound_order: audioPlaylist.order,
+            sound_repeat: audioPlaylist.repeat,
+            mute_original_audio: item.media.media_type === "video" ? audioPlaylist.videoAudioMode !== "original" : false,
             transition_type: presentation.transitionType,
             transition_duration_ms: presentation.transitionDurationMs,
             watermark_enabled: presentation.watermarkEnabled,
@@ -198,6 +204,8 @@ export function EditProgrammingItem({
           .in("id", removeIds);
         if (error) throw error;
       }
+      const retainedItems = mediaItems.filter((candidate) => selectedDisplays.has(candidate.display_id));
+      await Promise.all(retainedItems.map((candidate) => replaceAudioPlaylistTracks({ companyId, playlistItemId: candidate.id, tracks: activeAudioTracks })));
       const addedDisplays = displayIds.filter(
         (displayId) => !currentDisplays.has(displayId),
       );
@@ -212,7 +220,7 @@ export function EditProgrammingItem({
             ),
           ),
         );
-        const { error } = await supabase
+        const { data: createdItems, error } = await supabase
           .from("tv_playlist_items")
           .insert(
             addedDisplays.map((displayId) => ({
@@ -222,10 +230,12 @@ export function EditProgrammingItem({
               image_fit:
                 item.media.media_type === "image" ? imageFit : "contain",
               ...captionDatabaseValues(caption, item.media.media_type !== "message"),
-              sound_media_id: item.media.media_type === "video" ? (sound.videoAudioMode === "replace" ? sound.mediaId : null) : sound.mediaId,
-              sound_volume: sound.volume,
-              sound_loop: sound.loop,
-              mute_original_audio: item.media.media_type === "video" ? sound.videoAudioMode !== "original" : false,
+              sound_media_id: activeAudioTracks[0]?.mediaId ?? null,
+              sound_volume: audioPlaylist.volume,
+              sound_loop: audioPlaylist.repeat !== "none",
+              sound_order: audioPlaylist.order,
+              sound_repeat: audioPlaylist.repeat,
+              mute_original_audio: item.media.media_type === "video" ? audioPlaylist.videoAudioMode !== "original" : false,
               transition_type: presentation.transitionType,
               transition_duration_ms: presentation.transitionDurationMs,
               watermark_enabled: presentation.watermarkEnabled,
@@ -240,8 +250,10 @@ export function EditProgrammingItem({
               position: (maxPositions.get(displayId) ?? -1) + 1,
               is_active: true,
             })),
-          );
+          )
+          .select("id");
         if (error) throw error;
+        await Promise.all((createdItems ?? []).map((createdItem) => replaceAudioPlaylistTracks({ companyId, playlistItemId: createdItem.id, tracks: activeAudioTracks })));
       }
       await onSaved();
       onClose();
@@ -383,7 +395,7 @@ export function EditProgrammingItem({
             {item.media.media_type !== "message" ? (
               <CaptionSettingsFields value={caption} onChange={setCaption} />
             ) : null}
-            <SoundPicker companyId={companyId} value={sound} isVideo={item.media.media_type === "video"} onChange={setSound} />
+            <AudioPlaylistEditor companyId={companyId} value={audioPlaylist} isVideo={item.media.media_type === "video"} onChange={setAudioPlaylist} legend="Músicas deste conteúdo" hint="Reordene, embaralhe ou defina como a sequência deve se repetir." />
           </div>
           <div className="form-tab-panel" hidden={activeTab !== "appearance"}>
             <PresentationSettingsFields

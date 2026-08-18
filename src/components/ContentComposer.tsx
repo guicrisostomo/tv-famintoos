@@ -26,7 +26,9 @@ import {
 } from "../services/storage";
 import { supabase } from "../services/supabase";
 import { resolveWatermarkLogo } from "../services/watermarkLogo";
-import { SoundPicker, type SoundSettings } from "./SoundPicker";
+import { AudioPlaylistEditor } from "./AudioPlaylistEditor";
+import type { AudioPlaylistSettings } from "../domain/audioPlaylist";
+import { replaceAudioPlaylistTracks } from "../services/audioPlaylist";
 import { PresentationSettingsFields, type PresentationSettings } from "./PresentationSettingsFields";
 import { buildWatermarkTemplates } from "./watermarkTemplates";
 import { ContentScheduleFields } from "./ContentScheduleFields";
@@ -166,7 +168,7 @@ export function ContentComposer({
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const [activeTab, setActiveTab] = useState<"content" | "appearance" | "schedule" | "tvs">("content");
-  const [sound, setSound] = useState<SoundSettings>({ mediaId: null, media: null, volume: .7, loop: true, muteOriginalAudio: false, videoAudioMode: "original" });
+  const [audioPlaylist, setAudioPlaylist] = useState<AudioPlaylistSettings>({ tracks: [], volume: .7, order: "sequential", repeat: "all", videoAudioMode: "original" });
   const [presentation, setPresentation] = useState<PresentationSettings>({
     transitionType: "fade",
     transitionDurationMs: 700,
@@ -239,7 +241,7 @@ export function ContentComposer({
     setAnimation("none");
     setImageFit("contain");
     setCaption({ ...defaultCaptionSettings });
-    setSound({ mediaId: null, media: null, volume: .7, loop: true, muteOriginalAudio: false, videoAudioMode: "original" });
+    setAudioPlaylist({ tracks: [], volume: .7, order: "sequential", repeat: "all", videoAudioMode: "original" });
     setError(null);
   };
   const selectFile = async (nextFile: File | null) => {
@@ -341,8 +343,8 @@ export function ContentComposer({
       setError("Digite o texto que será exibido.");
       return;
     }
-    if (type === "video" && sound.videoAudioMode === "replace" && !sound.mediaId) {
-      setError("Escolha ou envie o áudio que substituirá o som original do vídeo.");
+    if (type === "video" && audioPlaylist.videoAudioMode === "replace" && !audioPlaylist.tracks.length) {
+      setError("Escolha ao menos uma música para substituir o áudio original do vídeo.");
       return;
     }
     if (presentation.watermarkEnabled && presentation.watermarkLogoUrl.trim() && !presentation.watermarkLogoUrl.trim().startsWith("https://")) {
@@ -479,6 +481,7 @@ export function ContentComposer({
           item.display_id,
           Math.max(maxPosition.get(item.display_id) ?? -1, item.position),
         );
+      const activeAudioTracks = type === "video" && audioPlaylist.videoAudioMode !== "replace" ? [] : audioPlaylist.tracks;
       const rows = selectedDisplays.map((displayId) => ({
         company_id: companyId,
         display_id: displayId,
@@ -487,10 +490,12 @@ export function ContentComposer({
         is_active: true,
         image_fit: type === "image" ? imageFit : "contain",
         ...captionDatabaseValues(caption, type !== "message"),
-        sound_media_id: type === "video" ? (sound.videoAudioMode === "replace" ? sound.mediaId : null) : sound.mediaId,
-        sound_volume: sound.volume,
-        sound_loop: sound.loop,
-        mute_original_audio: type === "video" ? sound.videoAudioMode !== "original" : false,
+        sound_media_id: activeAudioTracks[0]?.mediaId ?? null,
+        sound_volume: audioPlaylist.volume,
+        sound_loop: audioPlaylist.repeat !== "none",
+        sound_order: audioPlaylist.order,
+        sound_repeat: audioPlaylist.repeat,
+        mute_original_audio: type === "video" ? audioPlaylist.videoAudioMode !== "original" : false,
         transition_type: presentation.transitionType,
         transition_duration_ms: presentation.transitionDurationMs,
         watermark_enabled: presentation.watermarkEnabled,
@@ -503,10 +508,12 @@ export function ContentComposer({
         watermark_qr_enabled: presentation.watermarkEnabled && (presentation.watermarkStyle === "qr_only" || presentation.watermarkQrEnabled),
         watermark_qr_value: presentation.watermarkEnabled && (presentation.watermarkStyle === "qr_only" || presentation.watermarkQrEnabled) ? presentation.watermarkQrValue.trim() || null : null,
       }));
-      const { error: playlistError } = await supabase
+      const { data: createdPlaylistItems, error: playlistError } = await supabase
         .from("tv_playlist_items")
-        .insert(rows);
+        .insert(rows)
+        .select("id");
       if (playlistError) throw playlistError;
+      await Promise.all((createdPlaylistItems ?? []).map((createdItem) => replaceAudioPlaylistTracks({ companyId, playlistItemId: createdItem.id, tracks: activeAudioTracks })));
       await onSaved();
       setSaved(true);
     } catch (caught) {
@@ -605,7 +612,7 @@ export function ContentComposer({
               </button>
             </div>
             <div className="editor-form">
-              <SoundPicker companyId={companyId} value={sound} isVideo={type === "video"} onChange={setSound} />
+              <AudioPlaylistEditor companyId={companyId} value={audioPlaylist} isVideo={type === "video"} onChange={setAudioPlaylist} legend="Músicas deste conteúdo" hint="Use o áudio original do vídeo, remova-o ou monte uma sequência com várias músicas." />
               <label>
                 Título
                 <input

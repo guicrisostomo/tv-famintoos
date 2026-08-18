@@ -1,3 +1,5 @@
+import type { AudioPlaybackOrder, AudioRepeatMode } from '../domain/audioPlaylist'
+
 export interface TvAudioDiagnostics {
   enabled: boolean
   unlocked: boolean
@@ -9,6 +11,14 @@ export interface TvAudioDiagnostics {
 
 type WebkitWindow = Window & typeof globalThis & { webkitAudioContext?: typeof AudioContext }
 type Listener = (diagnostics: TvAudioDiagnostics) => void
+
+export interface TvAudioPlaylistConfig {
+  key: string
+  tracks: { id: string; title?: string | null; url: string; volume: number }[]
+  volume: number
+  order: AudioPlaybackOrder
+  repeat: AudioRepeatMode
+}
 
 function createBellUrl() {
   const sampleRate = 22050
@@ -35,6 +45,10 @@ class TvAudioService {
   private bellSource: MediaElementAudioSourceNode | null = null
   private bell: HTMLAudioElement | null = null
   private soundtrack: HTMLAudioElement | null = null
+  private playlist: TvAudioPlaylistConfig | null = null
+  private playlistQueue: number[] = []
+  private playlistIndex = -1
+  private playlistErrors = 0
   private bellUrl: string | null = null
   private media = new Set<HTMLMediaElement>()
   private listeners = new Set<Listener>()
@@ -89,17 +103,34 @@ class TvAudioService {
   }
 
   async playSoundtrack(url: string, volume = .7, loop = true) {
-    if (!this.enabled) return
-    this.initializeAudio(); await this.resumeAudioContext()
-    const audio = this.soundtrack ?? new Audio()
-    this.soundtrack = audio; this.media.add(audio)
-    if (audio.src !== url) { audio.pause(); audio.src = url; audio.load() }
-    audio.loop = loop; audio.volume = Math.max(0, Math.min(1, volume * this.volume)); this.loadedMedia = url
-    try { await audio.play(); this.lastError = null; this.emit() }
-    catch (error) { this.captureError(error, 'Falha ao reproduzir o som da mídia.'); throw error }
+    return this.playPlaylist({ key: `legacy:${url}`, tracks: [{ id: url, title: url, url, volume: 1 }], volume, order: 'sequential', repeat: loop ? 'all' : 'none' })
   }
 
-  stopSoundtrack() { if (!this.soundtrack) return; this.soundtrack.pause(); this.soundtrack.currentTime = 0; this.emit() }
+  async playPlaylist(config: TvAudioPlaylistConfig) {
+    if (!this.enabled || !config.tracks.length) return
+    this.initializeAudio(); await this.resumeAudioContext()
+    const audio = this.ensureSoundtrack()
+    const samePlaylist = this.playlist?.key === config.key
+    this.playlist = config
+    if (!samePlaylist || this.playlistIndex < 0 || this.playlistIndex >= config.tracks.length) {
+      this.playlistQueue = this.createQueue(config.order, config.tracks.length, -1)
+      this.playlistIndex = this.playlistQueue.shift() ?? 0
+      this.playlistErrors = 0
+      await this.loadPlaylistTrack(audio)
+      return
+    }
+    const track = config.tracks[this.playlistIndex]
+    audio.volume = this.trackVolume(config.volume, track.volume)
+    if (audio.paused) {
+      try { await audio.play(); this.lastError = null; this.emit() }
+      catch (error) { this.captureError(error, 'Falha ao retomar a playlist de músicas.'); throw error }
+    }
+  }
+
+  stopSoundtrack() {
+    if (this.soundtrack) { this.soundtrack.pause(); this.soundtrack.currentTime = 0 }
+    this.playlist = null; this.playlistQueue = []; this.playlistIndex = -1; this.playlistErrors = 0; this.emit()
+  }
   pauseSoundtrack() { if (!this.soundtrack) return; this.soundtrack.pause(); this.emit() }
 
   releaseMedia(element: HTMLMediaElement) {
@@ -130,13 +161,66 @@ class TvAudioService {
   dispose() {
     this.pauseAllAudio(); document.removeEventListener('visibilitychange', this.handleVisibility); document.removeEventListener('webkitvisibilitychange', this.handleVisibility)
     window.removeEventListener('focus', this.handleResume); window.removeEventListener('pageshow', this.handleResume); window.removeEventListener('blur', this.handlePause)
-    this.soundtrack?.removeAttribute('src'); this.soundtrack?.load(); this.soundtrack = null; this.media.clear(); this.bellSource?.disconnect(); this.bell?.removeAttribute('src'); if (this.bellUrl) URL.revokeObjectURL(this.bellUrl); void this.context?.close()
+    if (this.soundtrack) { this.soundtrack.removeEventListener('ended', this.handlePlaylistEnded); this.soundtrack.removeEventListener('error', this.handlePlaylistError); this.soundtrack.removeAttribute('src'); this.soundtrack.load() }
+    this.soundtrack = null; this.playlist = null; this.playlistQueue = []; this.playlistIndex = -1; this.media.clear(); this.bellSource?.disconnect(); this.bell?.removeAttribute('src'); if (this.bellUrl) URL.revokeObjectURL(this.bellUrl); void this.context?.close()
     this.context = null; this.gain = null; this.bellSource = null; this.bell = null; this.bellUrl = null; this.initialized = false; this.unlocked = false; this.emit()
   }
 
   private handleVisibility = () => { if (document.hidden) this.pauseAllAudio(); else void this.resumeAudioContext() }
   private handleResume = () => { void this.resumeAudioContext(); if ('speechSynthesis' in window) window.speechSynthesis.resume() }
   private handlePause = () => this.pauseForFocusLoss()
+  private ensureSoundtrack() {
+    if (this.soundtrack) return this.soundtrack
+    const audio = new Audio()
+    audio.preload = 'auto'
+    audio.addEventListener('ended', this.handlePlaylistEnded)
+    audio.addEventListener('error', this.handlePlaylistError)
+    this.soundtrack = audio
+    this.media.add(audio)
+    return audio
+  }
+  private handlePlaylistEnded = () => { this.playlistErrors = 0; void this.advancePlaylist() }
+  private handlePlaylistError = () => {
+    if (!this.soundtrack) return
+    this.reportMediaError(this.soundtrack, 'Falha ao carregar uma música da playlist.')
+    this.playlistErrors += 1
+    if (this.playlist && this.playlistErrors >= this.playlist.tracks.length) { this.stopSoundtrack(); return }
+    void this.advancePlaylist()
+  }
+  private async advancePlaylist() {
+    const playlist = this.playlist
+    const audio = this.soundtrack
+    if (!playlist || !audio) return
+    if (playlist.repeat !== 'one') {
+      if (!this.playlistQueue.length) {
+        if (playlist.repeat === 'none') { this.stopSoundtrack(); return }
+        this.playlistQueue = this.createQueue(playlist.order, playlist.tracks.length, this.playlistIndex)
+      }
+      this.playlistIndex = this.playlistQueue.shift() ?? 0
+    }
+    try { await this.loadPlaylistTrack(audio) }
+    catch { /* o diagnóstico já registra a falha; o evento error tenta a próxima faixa */ }
+  }
+  private async loadPlaylistTrack(audio: HTMLAudioElement) {
+    const playlist = this.playlist
+    const track = playlist?.tracks[this.playlistIndex]
+    if (!playlist || !track) return
+    audio.pause(); audio.loop = false; audio.src = track.url; audio.volume = this.trackVolume(playlist.volume, track.volume); audio.load()
+    this.loadedMedia = track.title || track.url
+    try { await audio.play(); this.lastError = null; this.emit() }
+    catch (error) { this.captureError(error, 'Falha ao reproduzir uma música da playlist.'); throw error }
+  }
+  private createQueue(order: AudioPlaybackOrder, size: number, previousIndex: number) {
+    const queue = Array.from({ length: size }, (_, index) => index)
+    if (order === 'shuffle') {
+      for (let index = queue.length - 1; index > 0; index -= 1) {
+        const swap = Math.floor(Math.random() * (index + 1)); [queue[index], queue[swap]] = [queue[swap], queue[index]]
+      }
+      if (queue.length > 1 && queue[0] === previousIndex) [queue[0], queue[1]] = [queue[1], queue[0]]
+    }
+    return queue
+  }
+  private trackVolume(playlistVolume: number, trackVolume: number) { return Math.max(0, Math.min(1, playlistVolume * trackVolume * this.volume)) }
   private reportMediaError(element: HTMLMediaElement, fallback: string) { const code = element.error?.code; const reason = code === 4 ? 'Formato de áudio incompatível.' : code === 2 ? 'Arquivo de áudio não encontrado ou inacessível.' : fallback; this.captureError(new Error(reason), reason) }
   private captureError(error: unknown, fallback: string) { const name = error instanceof DOMException ? error.name : ''; this.lastError = name === 'NotAllowedError' ? 'Reprodução bloqueada: pressione “Iniciar exibição” novamente.' : error instanceof Error ? error.message : fallback; this.emit() }
   private emit() { const value = this.diagnostics(); this.listeners.forEach(listener => listener(value)) }

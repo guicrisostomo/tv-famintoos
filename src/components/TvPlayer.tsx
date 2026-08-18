@@ -9,7 +9,7 @@ import {
   type DisplayPresentationSettings,
 } from '../domain/display';
 import { useDeploymentRefresh } from '../hooks/useDeploymentRefresh';
-import { playlistCaptionSelect, playlistPresentationSelect, type TvPlaylistRecord } from '../hooks/useTvData';
+import { playlistCaptionSelect, playlistPresentationSelect, type TvAudioTrackRecord, type TvPlaylistRecord } from '../hooks/useTvData';
 import { isPlayableMedia, playVideoElement, resolveMediaUrl } from '../services/media';
 import { readPayload, readPlayback, savePayload, savePlayback } from '../services/playerCache';
 import { selectNextInterruption } from '../services/playerQueue';
@@ -56,10 +56,11 @@ export function TvPlayer({ companyId, displayId }: { companyId: string; displayI
     readDisplayPresentation(displayId),
   );
   const [continuousAudio, setContinuousAudio] = useState<{
-    id: string;
-    title: string;
-    url: string;
+    key: string;
+    tracks: { id: string; title: string; url: string; volume: number }[];
     volume: number;
+    order: 'sequential' | 'shuffle';
+    repeat: 'all' | 'one' | 'none';
   } | null>(null);
   const [callSettings, setCallSettings] = useState<CallSpeechSettings>(defaultCallSpeechSettings);
   const [businessName, setBusinessName] = useState('');
@@ -156,6 +157,7 @@ export function TvPlayer({ companyId, displayId }: { companyId: string; displayI
         displayResult,
         templateResult,
         businessResult,
+        audioTracksResult,
       ] = await Promise.all([
         supabase.rpc('get_tv_player_payload', {
           p_company_id: companyId,
@@ -164,7 +166,7 @@ export function TvPlayer({ companyId, displayId }: { companyId: string; displayI
         supabase
           .from('tv_playlist_items')
           .select(
-            `id,display_id,media_id,position,is_active,image_fit,${playlistCaptionSelect},${playlistPresentationSelect},sound_media_id,sound_volume,sound_loop,mute_original_audio,media:tv_media!tv_playlist_items_media_id_fkey(id,title,media_type,media_url,message_text,duration_seconds,public_url,storage_provider,storage_key,animation,starts_at,ends_at,weekdays,start_time,end_time),sound_media:tv_media!tv_playlist_items_sound_media_id_fkey(id,title,media_type,media_url,message_text,duration_seconds,public_url,storage_provider,animation)`,
+            `id,display_id,media_id,position,is_active,image_fit,${playlistCaptionSelect},${playlistPresentationSelect},sound_media_id,sound_volume,sound_loop,sound_order,sound_repeat,mute_original_audio,media:tv_media!tv_playlist_items_media_id_fkey(id,title,media_type,media_url,message_text,duration_seconds,public_url,storage_provider,storage_key,animation,starts_at,ends_at,weekdays,start_time,end_time),sound_media:tv_media!tv_playlist_items_sound_media_id_fkey(id,title,media_type,media_url,message_text,duration_seconds,public_url,storage_provider,animation)`,
           )
           .eq('company_id', companyId)
           .eq('display_id', displayId)
@@ -181,7 +183,7 @@ export function TvPlayer({ companyId, displayId }: { companyId: string; displayI
           .order('requested_at'),
         supabase
           .from('tv_displays')
-          .select('sound_enabled,continuous_audio_enabled,continuous_audio_media_id,continuous_audio_volume,display_mode,display_width,display_height,datetime_enabled,datetime_show_date,datetime_show_time,datetime_show_seconds,datetime_position,datetime_theme,datetime_time_zone,continuous_audio_media:tv_media!tv_displays_continuous_audio_media_id_fkey(id,title,media_url,public_url)')
+          .select('sound_enabled,continuous_audio_enabled,continuous_audio_media_id,continuous_audio_volume,continuous_audio_order,continuous_audio_repeat,display_mode,display_width,display_height,datetime_enabled,datetime_show_date,datetime_show_time,datetime_show_seconds,datetime_position,datetime_theme,datetime_time_zone,continuous_audio_media:tv_media!tv_displays_continuous_audio_media_id_fkey(id,title,media_url,public_url)')
           .eq('company_id', companyId)
           .eq('id', displayId)
           .single(),
@@ -193,6 +195,7 @@ export function TvPlayer({ companyId, displayId }: { companyId: string; displayI
           .limit(1)
           .maybeSingle(),
         supabase.from('business').select('name').eq('cnpj', companyId).maybeSingle(),
+        supabase.from('tv_audio_playlist_tracks').select('id,display_id,playlist_item_id,media_id,position,volume,media:tv_media!tv_audio_playlist_tracks_media_id_fkey(id,title,media_type,media_url,message_text,duration_seconds,public_url,storage_provider)').eq('company_id', companyId).order('position'),
       ]);
       if (programResult.error && playlistResult.error && callsResult.error) {
         runtime.error(programResult.error ?? playlistResult.error ?? callsResult.error);
@@ -202,6 +205,8 @@ export function TvPlayer({ companyId, displayId }: { companyId: string; displayI
       const displaySettings = displayResult.data as typeof displayResult.data & {
         continuous_audio_enabled?: boolean;
         continuous_audio_volume?: number;
+        continuous_audio_order?: 'sequential' | 'shuffle';
+        continuous_audio_repeat?: 'all' | 'one' | 'none';
         continuous_audio_media?: { id: string; title: string; media_url: string | null; public_url: string | null } | null;
         display_mode?: DisplayPresentationSettings['mode'];
         display_width?: number;
@@ -215,10 +220,33 @@ export function TvPlayer({ companyId, displayId }: { companyId: string; displayI
         datetime_time_zone?: string;
       };
       const nextSoundEnabled = displaySettings?.sound_enabled ?? true;
+      const audioTrackRows = (audioTracksResult.data ?? []) as unknown as TvAudioTrackRecord[];
+      const tracksByItem = new Map<string, TvAudioTrackRecord[]>();
+      const displayTrackRows: TvAudioTrackRecord[] = [];
+      for (const track of audioTrackRows) {
+        if (track.display_id === displayId) displayTrackRows.push(track);
+        if (!track.playlist_item_id) continue;
+        const grouped = tracksByItem.get(track.playlist_item_id) ?? [];
+        grouped.push(track);
+        tracksByItem.set(track.playlist_item_id, grouped);
+      }
       const displayTrack = displaySettings?.continuous_audio_media;
       const displayTrackUrl = displayTrack?.public_url ?? displayTrack?.media_url;
-      const nextContinuousAudio = displaySettings?.continuous_audio_enabled && displayTrack && displayTrackUrl
-        ? { id: displayTrack.id, title: displayTrack.title, url: displayTrackUrl, volume: Number(displaySettings.continuous_audio_volume ?? 0.7) }
+      const displayTracks = displayTrackRows.flatMap((track) => {
+        const url = track.media.public_url ?? track.media.media_url;
+        return url ? [{ id: track.media.id, title: track.media.title, url, volume: Number(track.volume ?? 1) }] : [];
+      });
+      if (!displayTracks.length && displayTrack && displayTrackUrl) displayTracks.push({ id: displayTrack.id, title: displayTrack.title, url: displayTrackUrl, volume: 1 });
+      const continuousOrder = displaySettings?.continuous_audio_order ?? 'sequential';
+      const continuousRepeat = displaySettings?.continuous_audio_repeat ?? 'all';
+      const nextContinuousAudio = displaySettings?.continuous_audio_enabled && displayTracks.length
+        ? {
+            key: `display:${displayId}:${continuousOrder}:${continuousRepeat}:${displayTracks.map((track) => `${track.id}-${track.volume}`).join(',')}`,
+            tracks: displayTracks,
+            volume: Number(displaySettings.continuous_audio_volume ?? 0.7),
+            order: continuousOrder,
+            repeat: continuousRepeat,
+          }
         : null;
       const nextCallSettings = templateResult.data
         ? {
@@ -250,8 +278,7 @@ export function TvPlayer({ companyId, displayId }: { companyId: string; displayI
         saveDisplayPresentation(displayId, nextDisplayPresentation);
       }
       setContinuousAudio((current) =>
-        current?.id === nextContinuousAudio?.id &&
-        current?.url === nextContinuousAudio?.url &&
+        current?.key === nextContinuousAudio?.key &&
         current?.volume === nextContinuousAudio?.volume
           ? current
           : nextContinuousAudio,
@@ -259,7 +286,13 @@ export function TvPlayer({ companyId, displayId }: { companyId: string; displayI
       tvAudioService.setEnabled(nextSoundEnabled);
       const legacyItems = ((playlistResult.data ?? []) as unknown as TvPlaylistRecord[])
         .filter((item) => isScheduledNow(item.media))
-        .map((item) => ({
+        .map((item) => {
+          const configuredTracks = (tracksByItem.get(item.id) ?? []).flatMap((track) => {
+            const url = track.media.public_url ?? track.media.media_url;
+            return url ? [{ id: track.media.id, title: track.media.title, url, volume: Number(track.volume ?? 1) }] : [];
+          });
+          if (!configuredTracks.length && item.sound_media && (item.sound_media.public_url || item.sound_media.media_url)) configuredTracks.push({ id: item.sound_media.id, title: item.sound_media.title, url: item.sound_media.public_url ?? item.sound_media.media_url!, volume: 1 });
+          return ({
           id: item.id,
           companyId,
           displayIds: [displayId],
@@ -293,6 +326,13 @@ export function TvPlayer({ companyId, displayId }: { companyId: string; displayI
                   muteOriginalAudio: item.mute_original_audio ?? false,
                 }
               : null,
+          audioPlaylist: configuredTracks.length ? {
+            tracks: configuredTracks,
+            volume: item.sound_volume ?? 0.7,
+            order: item.sound_order ?? 'sequential',
+            repeat: item.sound_repeat ?? (item.sound_loop === false ? 'none' : 'all'),
+            muteOriginalAudio: item.mute_original_audio ?? false,
+          } : null,
           resumeBehavior: 'resume' as const,
           active: item.is_active,
           media: {
@@ -310,7 +350,8 @@ export function TvPlayer({ companyId, displayId }: { companyId: string; displayI
             animation: item.media.animation ?? 'none',
             title: item.media.media_type === 'message' ? item.media.message_text : item.media.title,
           },
-        }));
+          });
+        });
       const known = new Set(legacyItems.map((item) => item.id));
       const programItems = (programPayload?.items ?? []).filter((item) => !known.has(item.id));
       const programInterruptions = (programPayload?.interruptions ?? []).filter(
@@ -443,6 +484,16 @@ export function TvPlayer({ companyId, displayId }: { companyId: string; displayI
             event: '*',
             schema: 'public',
             table: 'tv_media',
+            filter: `company_id=eq.${companyId}`,
+          },
+          () => void load(),
+        )
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'tv_audio_playlist_tracks',
             filter: `company_id=eq.${companyId}`,
           },
           () => void load(),
@@ -593,7 +644,7 @@ export function TvPlayer({ companyId, displayId }: { companyId: string; displayI
       void load();
       void tvAudioService.resumeAudioContext();
       if (activated && soundEnabled && continuousAudio && !activeInterruption && hasPlayableContent) {
-        void tvAudioService.playSoundtrack(continuousAudio.url, continuousAudio.volume, true).catch((error) => runtime.error(error));
+        void tvAudioService.playPlaylist(continuousAudio).catch((error) => runtime.error(error));
       }
       const video = videoRef.current;
       if (activated && video && current?.media.type === 'video') {
@@ -609,7 +660,7 @@ export function TvPlayer({ companyId, displayId }: { companyId: string; displayI
               return;
             }
           }
-          if (soundEnabled && !continuousAudio && !current.muted && !current.soundtrack?.muteOriginalAudio) {
+          if (soundEnabled && !continuousAudio && !current.muted && !current.audioPlaylist?.muteOriginalAudio) {
             void tvAudioService.playMediaAudio(video, current.volume).catch(() => {
               // Keep the visual track running even if audible playback is denied.
               video.muted = true;
@@ -676,7 +727,7 @@ export function TvPlayer({ companyId, displayId }: { companyId: string; displayI
     current?.id,
     current?.media.type,
     current?.muted,
-    current?.soundtrack?.muteOriginalAudio,
+    current?.audioPlaylist?.muteOriginalAudio,
     current?.volume,
     displayId,
     hasPlayableContent,
@@ -749,22 +800,24 @@ export function TvPlayer({ companyId, displayId }: { companyId: string; displayI
       return;
     }
     void tvAudioService
-      .playSoundtrack(continuousAudio.url, continuousAudio.volume, true)
+      .playPlaylist(continuousAudio)
       .catch((error) => runtime.error(error));
     return () => tvAudioService.pauseSoundtrack();
   }, [activated, activeInterruption, continuousAudio, hasPlayableContent, runtime, soundEnabled]);
 
   useEffect(() => {
     if (continuousAudio) return;
-    if (!activated || activeInterruption || !soundEnabled || !current?.soundtrack) {
+    if (!activated || activeInterruption || !soundEnabled || !current?.audioPlaylist?.tracks.length) {
       tvAudioService.stopSoundtrack();
       return;
     }
+    const playlist = current.audioPlaylist;
+    const key = `content:${current.id}:${playlist.order}:${playlist.repeat}:${playlist.tracks.map((track) => `${track.id}-${track.volume}`).join(',')}`;
     void tvAudioService
-      .playSoundtrack(current.soundtrack.url, current.soundtrack.volume, current.soundtrack.loop)
+      .playPlaylist({ key, tracks: playlist.tracks, volume: playlist.volume, order: playlist.order, repeat: playlist.repeat })
       .catch((error) => runtime.error(error));
     return () => tvAudioService.stopSoundtrack();
-  }, [activated, activeInterruption, continuousAudio, current?.id, current?.soundtrack, runtime, soundEnabled]);
+  }, [activated, activeInterruption, continuousAudio, current?.audioPlaylist, current?.id, runtime, soundEnabled]);
 
   useEffect(() => {
     if (!next) {
@@ -897,13 +950,13 @@ export function TvPlayer({ companyId, displayId }: { companyId: string; displayI
           status: 'completed',
           completed_at: new Date().toISOString(),
         });
-      if (videoRef.current && !continuousAudio && !current?.muted && !current?.soundtrack?.muteOriginalAudio)
+      if (videoRef.current && !continuousAudio && !current?.muted && !current?.audioPlaylist?.muteOriginalAudio)
         void tvAudioService
           .playMediaAudio(videoRef.current, current?.volume ?? 1)
           .catch(() => undefined);
     }, activeInterruption.durationSeconds * 1000);
     return () => runtime.clear(timer);
-  }, [activeInterruption, companyId, continuousAudio, current?.muted, current?.soundtrack?.muteOriginalAudio, current?.volume, runtime]);
+  }, [activeInterruption, companyId, continuousAudio, current?.audioPlaylist?.muteOriginalAudio, current?.muted, current?.volume, runtime]);
 
   useEffect(() => {
     if (!activeInterruption || activeInterruption.kind !== 'call' || !activated || !soundEnabled)
