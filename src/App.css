@@ -15,36 +15,30 @@
 }
 .brand {
   display: flex;
-  gap: 10px;
+  gap: 7px;
   align-items: center;
-  padding: 0 9px 26px;
+  padding: 0 3px 20px;
   font: 700 19px Poppins, sans-serif;
 }
-.famintoos-brand-mark {
-  width: 34px;
-  height: 34px;
-  display: grid;
-  place-items: center;
-  background: #fff4e6;
-  color: var(--green-900);
-  border-radius: 10px;
-}
-.famintoos-brand-mark img {
-  width: 27px;
-  height: 27px;
+.famintoos-brand-logo {
+  position: relative;
+  width: 126px;
+  height: 77px;
+  flex: 0 0 auto;
   display: block;
+  overflow: hidden;
 }
-.famintoos-brand-copy {
-  min-width: 0;
-  display: flex;
-  align-items: baseline;
-  gap: 6px;
+.famintoos-brand-logo img {
+  position: absolute;
+  top: -27px;
+  left: -10px;
+  width: 156px;
+  height: 156px;
+  max-width: none;
+  display: block;
+  filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.18));
 }
-.famintoos-brand-copy strong {
-  font-weight: 800;
-  letter-spacing: -0.02em;
-}
-.famintoos-brand-copy small {
+.famintoos-product-name {
   color: #ffd59a;
   font-size: 11px;
   font-weight: 800;
@@ -1766,13 +1760,23 @@
   .app-shell {
     grid-template-columns: 74px 1fr;
   }
-  .brand .famintoos-brand-copy,
+  .brand .famintoos-product-name,
   .nav-button span,
   .sidebar-footer {
     display: none;
   }
   .brand {
     padding-inline: 2px;
+  }
+  .brand .famintoos-brand-logo {
+    width: 40px;
+    height: 30px;
+  }
+  .brand .famintoos-brand-logo img {
+    top: -8px;
+    left: -4px;
+    width: 48px;
+    height: 48px;
   }
   .nav-button {
     justify-content: center;
@@ -1903,10 +1907,11 @@
   justify-content: center;
   gap: 10px;
   color: var(--green-900);
-  font:
-    700 20px Poppins,
-    sans-serif;
   margin-bottom: 30px;
+}
+.login-brand .famintoos-product-name {
+  color: var(--green-700);
+  font-size: 12px;
 }
 .login-icon {
   width: 50px;
