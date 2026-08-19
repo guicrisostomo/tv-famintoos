@@ -8,7 +8,7 @@ import {
   Palette,
   Plus,
   Settings2,
-  Tv,
+  ExternalLink,
 } from 'lucide-react';
 import { useState } from 'react';
 import { useAuth, type CompanyProfile } from '../auth/auth-context';
@@ -24,6 +24,7 @@ import { ProgrammingPage } from './ProgrammingPage';
 import { PromotionEditorPage } from './PromotionEditorPage';
 import { PromotionsPage } from './PromotionsPage';
 import { TvSetupPage } from './TvSetupPage';
+import { FamintoosBrand } from './FamintoosBrand';
 
 const navigation = [
   ['Início', Home],
@@ -60,12 +61,7 @@ export function AdminShell({
   return (
     <div className="app-shell">
       <aside className="sidebar">
-        <div className="brand">
-          <span className="brand-mark">
-            <Tv size={20} />
-          </span>
-          <span>Famintoos TV</span>
-        </div>
+        <FamintoosBrand className="brand" />
         <nav aria-label="Navegação principal">
           {navigation.map(([label, Icon]) => (
             <button
@@ -79,7 +75,12 @@ export function AdminShell({
             </button>
           ))}
         </nav>
-        <div className="sidebar-footer">Promoções e chamadas na sua TV</div>
+        <div className="sidebar-footer">
+          <span>Promoções e chamadas na sua TV</span>
+          <a href="https://famintoos.com.br/admin" target="_blank" rel="noreferrer">
+            Painel Famintoos <ExternalLink size={13} />
+          </a>
+        </div>
       </aside>
       <main className="main">
         <ConnectionBanner />

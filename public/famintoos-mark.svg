@@ -1,0 +1,8 @@
+<svg width="80" height="80" viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <title>Famintoos</title>
+  <path d="M10 10 Q40 70 70 10 Z" fill="#FFD966" stroke="#F4B183" stroke-width="3"/>
+  <path d="M16 18 Q40 62 64 18 Z" fill="#E06666"/>
+  <circle cx="30" cy="30" r="5" fill="#C00000"/>
+  <circle cx="50" cy="35" r="4" fill="#C00000"/>
+  <circle cx="40" cy="50" r="3" fill="#C00000"/>
+</svg>

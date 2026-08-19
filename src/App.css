@@ -4,7 +4,7 @@
   grid-template-columns: 236px 1fr;
 }
 .sidebar {
-  background: var(--green-900);
+  background: linear-gradient(180deg, #9a001a 0%, #b3132d 52%, #7a0015 100%);
   color: white;
   padding: 28px 18px;
   display: flex;
@@ -18,18 +18,37 @@
   gap: 10px;
   align-items: center;
   padding: 0 9px 26px;
-  font:
-    700 19px Manrope,
-    sans-serif;
+  font: 700 19px Poppins, sans-serif;
 }
-.brand-mark {
+.famintoos-brand-mark {
   width: 34px;
   height: 34px;
   display: grid;
   place-items: center;
-  background: #f6b83f;
+  background: #fff4e6;
   color: var(--green-900);
   border-radius: 10px;
+}
+.famintoos-brand-mark img {
+  width: 27px;
+  height: 27px;
+  display: block;
+}
+.famintoos-brand-copy {
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+.famintoos-brand-copy strong {
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+.famintoos-brand-copy small {
+  color: #ffd59a;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
 }
 .sidebar nav {
   display: grid;
@@ -37,7 +56,7 @@
 }
 .nav-button {
   border: 0;
-  color: #c5d8cf;
+  color: #ffe4e6;
   background: transparent;
   border-radius: 9px;
   display: flex;
@@ -56,7 +75,22 @@
   padding: 16px 10px 0;
   border-top: 1px solid rgba(255, 255, 255, 0.13);
   font-size: 12px;
-  color: #a7c0b5;
+  color: #ffe4e6;
+}
+.sidebar-footer > span {
+  display: block;
+}
+.sidebar-footer a {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 10px;
+  color: #ffd59a;
+  font-weight: 700;
+  text-decoration: none;
+}
+.sidebar-footer a:hover {
+  color: white;
 }
 .main {
   min-width: 0;
@@ -101,7 +135,7 @@
 }
 .page-header h1 {
   font:
-    700 29px Manrope,
+    700 29px Poppins,
     sans-serif;
   margin-bottom: 7px;
 }
@@ -122,7 +156,7 @@
 .button.primary {
   color: white;
   background: var(--green-700);
-  box-shadow: 0 4px 12px rgba(23, 104, 69, 0.2);
+  box-shadow: 0 4px 12px rgba(215, 38, 61, 0.22);
 }
 .button.secondary {
   color: var(--ink);
@@ -145,7 +179,7 @@
   border: 1px solid var(--line);
   border-radius: 13px;
   padding: 20px;
-  box-shadow: 0 8px 24px rgba(29, 51, 40, 0.04);
+  box-shadow: 0 8px 24px rgba(215, 38, 61, 0.05);
 }
 .stat-label {
   color: var(--muted);
@@ -154,7 +188,7 @@
 }
 .stat-value {
   font:
-    700 26px Manrope,
+    700 26px Poppins,
     sans-serif;
 }
 .stat-detail {
@@ -175,7 +209,7 @@
 }
 .section-title h2 {
   font:
-    700 17px Manrope,
+    700 17px Poppins,
     sans-serif;
   margin: 0;
 }
@@ -363,7 +397,7 @@
   padding: 8%;
   text-align: center;
   font:
-    700 clamp(20px, 3vw, 44px) Manrope,
+    700 clamp(20px, 3vw, 44px) Poppins,
     sans-serif;
 }
 .preview-actions {
@@ -397,7 +431,7 @@
 }
 .programming-tv-select > div strong {
   font:
-    700 17px Manrope,
+    700 17px Poppins,
     sans-serif;
 }
 .programming-tv-select small,
@@ -811,7 +845,7 @@
 .editor-form textarea:focus,
 .editor-form select:focus {
   border-color: var(--green-500);
-  outline: 3px solid rgba(38, 162, 105, 0.13);
+  outline: 3px solid rgba(215, 38, 61, 0.13);
 }
 .editor-form fieldset {
   border: 1px solid var(--line);
@@ -976,7 +1010,7 @@
   gap: 8px;
   padding: 9px;
   border-radius: 8px;
-  background: #f6f8f6;
+  background: #fafaf9;
 }
 .check-grid input {
   width: auto;
@@ -1095,7 +1129,7 @@
 }
 .call-example strong {
   font:
-    700 clamp(26px, 4vw, 48px) Manrope,
+    700 clamp(26px, 4vw, 48px) Poppins,
     sans-serif;
 }
 .call-example span {
@@ -1409,7 +1443,7 @@
   background: var(--caption-background, rgba(0, 0, 0, 0.72));
   box-shadow: 0 8px 30px rgba(0, 0, 0, 0.28);
   text-align: center;
-  font-family: var(--caption-font-family, Manrope, sans-serif);
+  font-family: var(--caption-font-family, Poppins, sans-serif);
   font-weight: 700;
   line-height: 1.2;
   overflow: hidden;
@@ -1732,7 +1766,7 @@
   .app-shell {
     grid-template-columns: 74px 1fr;
   }
-  .brand span,
+  .brand .famintoos-brand-copy,
   .nav-button span,
   .sidebar-footer {
     display: none;
@@ -1850,7 +1884,10 @@
   display: grid;
   place-items: center;
   padding: 24px;
-  background: radial-gradient(circle at top, #e5f3eb, #f6f8f6 48%);
+  background:
+    radial-gradient(circle at 18% 0%, rgba(245, 158, 11, 0.2), transparent 34%),
+    radial-gradient(circle at 82% 12%, rgba(215, 38, 61, 0.16), transparent 38%),
+    #fff9f3;
 }
 .login-card {
   width: min(440px, 100%);
@@ -1858,7 +1895,7 @@
   border: 1px solid var(--line);
   border-radius: 18px;
   padding: 34px;
-  box-shadow: 0 24px 70px rgba(18, 60, 43, 0.12);
+  box-shadow: 0 24px 70px rgba(154, 0, 26, 0.14);
 }
 .login-brand {
   display: flex;
@@ -1867,7 +1904,7 @@
   gap: 10px;
   color: var(--green-900);
   font:
-    700 20px Manrope,
+    700 20px Poppins,
     sans-serif;
   margin-bottom: 30px;
 }
@@ -1884,7 +1921,7 @@
 .login-card h1 {
   text-align: center;
   font:
-    700 27px Manrope,
+    700 27px Poppins,
     sans-serif;
   margin: 16px 0 7px;
 }
@@ -1913,7 +1950,7 @@
 }
 .login-form input:focus {
   border-color: var(--green-500);
-  outline: 3px solid rgba(38, 162, 105, 0.13);
+  outline: 3px solid rgba(215, 38, 61, 0.13);
 }
 .login-submit {
   width: 100%;
@@ -2871,7 +2908,7 @@
 .video-audio-mode > button.selected {
   border-color: var(--green-500);
   background: #eef9f3;
-  box-shadow: 0 0 0 2px rgba(38, 162, 105, .1);
+  box-shadow: 0 0 0 2px rgba(215, 38, 61, .1);
 }
 .video-audio-mode strong,
 .video-audio-mode small {
@@ -3452,7 +3489,7 @@
 }
 .presentation-section-heading h3 {
   font:
-    800 16px/1.25 Manrope,
+    800 16px/1.25 Poppins,
     sans-serif;
 }
 .presentation-section-heading p {
@@ -3491,7 +3528,7 @@
 .transition-option-grid > button.selected {
   border-color: var(--green-500);
   background: #eef9f3;
-  box-shadow: 0 0 0 2px rgba(38, 162, 105, 0.1);
+  box-shadow: 0 0 0 2px rgba(215, 38, 61, 0.1);
 }
 .transition-option-grid button > span:nth-child(2),
 .transition-option-grid strong,
@@ -3626,7 +3663,7 @@
   padding: 8%;
   text-align: center;
   font:
-    800 clamp(19px, 3vw, 38px)/1.15 Manrope,
+    800 clamp(19px, 3vw, 38px)/1.15 Poppins,
     sans-serif;
 }
 .presentation-replay {
@@ -3799,7 +3836,7 @@
 }
 .tv-watermark strong {
   font:
-    800 clamp(17px, 2vw, 34px)/1.1 Manrope,
+    800 clamp(17px, 2vw, 34px)/1.1 Poppins,
     sans-serif;
 }
 .tv-watermark span {
@@ -3810,7 +3847,7 @@
   margin-left: auto;
   white-space: nowrap;
   font:
-    800 clamp(15px, 1.7vw, 29px)/1 Manrope,
+    800 clamp(15px, 1.7vw, 29px)/1 Poppins,
     sans-serif;
 }
 .transition-curtain {
@@ -4005,7 +4042,7 @@
 }
 .bulk-header-count strong {
   font:
-    800 25px/1 Manrope,
+    800 25px/1 Poppins,
     sans-serif;
 }
 .bulk-header-count span {
@@ -4045,7 +4082,7 @@
 }
 .bulk-section-heading h2 {
   font:
-    800 17px/1.3 Manrope,
+    800 17px/1.3 Poppins,
     sans-serif;
 }
 .bulk-section-heading p {
@@ -4071,7 +4108,7 @@
 }
 .bulk-search:focus-within {
   border-color: var(--green-500);
-  box-shadow: 0 0 0 3px rgba(38, 162, 105, 0.1);
+  box-shadow: 0 0 0 3px rgba(215, 38, 61, 0.1);
 }
 .bulk-search input {
   min-width: 0;

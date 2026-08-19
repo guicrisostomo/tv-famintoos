@@ -1,19 +1,19 @@
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap');
 
 :root {
-  font-family: 'DM Sans', system-ui, sans-serif;
-  color: #14211b;
-  background: #f6f8f6;
+  font-family: 'Poppins', system-ui, sans-serif;
+  color: #1a1a1a;
+  background: #fafaf9;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
-  --green-900: #123c2b;
-  --green-700: #176845;
-  --green-500: #26a269;
-  --green-100: #dff4e8;
-  --green-50: #f1f8f4;
-  --ink: #14211b;
-  --muted: #68756f;
-  --line: #dfe5e1;
+  --green-900: #9a001a;
+  --green-700: #d7263d;
+  --green-500: #e74c3c;
+  --green-100: #fee2e2;
+  --green-50: #fff7ed;
+  --ink: #1a1a1a;
+  --muted: #57534e;
+  --line: #e7e5e4;
   --surface: #fff;
 }
 
@@ -132,7 +132,7 @@ h1, h2, h3, p { margin-top: 0; }
 .watermark-style-picker > button.selected {
   border-color: var(--green-500);
   background: var(--green-50);
-  box-shadow: 0 0 0 2px rgba(38, 162, 105, .1);
+  box-shadow: 0 0 0 2px rgba(215, 38, 61, .1);
 }
 
 .watermark-style-picker > button > span:nth-child(2) {
